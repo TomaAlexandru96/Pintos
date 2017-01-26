@@ -88,7 +88,9 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
-    int base_priority;                   /* used to reset to original priority */
+    int base_priority;                  /* Used to reset to original priority */
+    struct lock *waiting_lock;          /* The lock that the current thread is
+                                           waiting for */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -99,8 +101,9 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
 #endif
 
-    int64_t wake_up_tick;                 /* To monitor of sleep_time */
-    struct list_elem sleeping_thread;    /* Add to sleeping_thread_list when calling timer_sleep*/
+    int64_t wake_up_tick;               /* To monitor of sleep_time */
+    struct list_elem sleeping_thread;   /* Add to sleeping_thread_list when
+                                           calling timer_sleep*/
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
@@ -131,6 +134,7 @@ void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
 list_less_func priority_queue_sort;
+void reset_thread_ready_list (struct thread *t);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);

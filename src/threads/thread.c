@@ -354,6 +354,16 @@ priority_queue_sort (const struct list_elem *a,
   return a_thread->priority > b_thread->priority;
 }
 
+void
+reset_thread_ready_list (struct thread *t)
+{
+  list_remove (&t->elem);
+  list_insert_ordered (&ready_list, t, &priority_queue_sort, NULL);
+  if (t->priority > thread_current ()->priority) {
+    thread_yield ();
+  }
+}
+
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority)
