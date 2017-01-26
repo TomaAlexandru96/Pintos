@@ -133,7 +133,6 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
-list_less_func priority_queue_sort;
 void reset_thread_ready_list (struct thread *t);
 
 /* Performs some operation on thread t, given auxiliary data AUX. */

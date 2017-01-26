@@ -70,6 +70,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+static list_less_func priority_queue_sort;
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -344,10 +345,10 @@ thread_foreach (thread_action_func *func, UNUSED void *aux)
     }
 }
 
-bool
+static bool
 priority_queue_sort (const struct list_elem *a,
                      const struct list_elem *b,
-                     void *aux)
+                     void *aux UNUSED)
 {
   struct thread *a_thread = list_entry (a, struct thread, elem);
   struct thread *b_thread = list_entry (b, struct thread, elem);
@@ -358,7 +359,7 @@ void
 reset_thread_ready_list (struct thread *t)
 {
   list_remove (&t->elem);
-  list_insert_ordered (&ready_list, t, &priority_queue_sort, NULL);
+  list_insert_ordered (&ready_list, &t->elem, &priority_queue_sort, NULL);
   if (t->priority > thread_current ()->priority) {
     thread_yield ();
   }
@@ -369,6 +370,7 @@ void
 thread_set_priority (int new_priority)
 {
   thread_current ()->priority = new_priority;
+  thread_current ()->base_priority = new_priority;
   if (!list_empty (&ready_list) && new_priority <
         list_entry (list_front (&ready_list), struct thread, elem)->priority)
     {
