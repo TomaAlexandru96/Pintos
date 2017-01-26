@@ -351,7 +351,7 @@ priority_queue_sort (const struct list_elem *a,
 {
   struct thread *a_thread = list_entry (a, struct thread, elem);
   struct thread *b_thread = list_entry (b, struct thread, elem);
-  return a_thread->priority >= b_thread->priority;
+  return a_thread->priority > b_thread->priority;
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -490,6 +490,7 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  t->base_priority = priority;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable ();
