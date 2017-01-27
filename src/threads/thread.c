@@ -369,7 +369,17 @@ reset_thread_ready_list (struct thread *t)
 void
 thread_set_priority (int new_priority)
 {
-  thread_current ()->priority = new_priority;
+  if (thread_current ()->priority != thread_current ()->base_priority)
+    {
+      if (thread_current ()->priority < new_priority)
+        {
+          thread_current ()->priority = new_priority;
+        }
+    }
+  else
+    {
+      thread_current ()->priority = new_priority;
+    }
   thread_current ()->base_priority = new_priority;
   if (!list_empty (&ready_list) && new_priority <
         list_entry (list_front (&ready_list), struct thread, elem)->priority)
@@ -504,6 +514,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->base_priority = priority;
   t->magic = THREAD_MAGIC;
+  list_init (&t->holding_locks);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

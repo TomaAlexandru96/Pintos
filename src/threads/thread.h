@@ -91,6 +91,7 @@ struct thread
     int base_priority;                  /* Used to reset to original priority */
     struct lock *waiting_lock;          /* The lock that the current thread is
                                            waiting for */
+    struct list holding_locks;          /* List of locks that the thead holds */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
