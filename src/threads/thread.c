@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include "threads/fixed-point.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -377,7 +378,7 @@ priority_queue_sort (const struct list_elem *a,
 static bool
 compare_thread_priority (const struct list_elem *a,
                     	 const struct list_elem *b,
-                    	 void *aux)
+                    	 void *aux UNUSED)
 {
   struct thread *a_thread, *b_thread;
   a_thread = list_entry (a, struct thread, elem);
@@ -505,6 +506,7 @@ thread_get_load_avg (void)
 }
 
 /* Computes recent cpu usage. */
+/*
 void
 thread_compute_recent_cpu (struct thread *t, void *aux UNUSED)
 {
@@ -517,8 +519,9 @@ thread_compute_recent_cpu (struct thread *t, void *aux UNUSED)
   recent_cpu = add_fp_and_int (recent_cpu, t->nice);
   t->recent_cpu = recent_cpu;
 }
-
+*/
 /* Returns 100 times the current thread's recent_cpu value. */
+
 int
 thread_get_recent_cpu (void)
 {
@@ -528,6 +531,7 @@ thread_get_recent_cpu (void)
   round_recent_cpu = fp_to_int_round_to_nearest (curr_recent_cpu);
   return round_recent_cpu;
 }
+
 
 /* Idle thread.  Executes when no other thread is ready to run.
 
