@@ -506,7 +506,7 @@ thread_get_load_avg (void)
 }
 
 /* Computes recent cpu usage. */
-/*
+
 void
 thread_compute_recent_cpu (struct thread *t, void *aux UNUSED)
 {
@@ -519,7 +519,7 @@ thread_compute_recent_cpu (struct thread *t, void *aux UNUSED)
   recent_cpu = add_fp_and_int (recent_cpu, t->nice);
   t->recent_cpu = recent_cpu;
 }
-*/
+
 /* Returns 100 times the current thread's recent_cpu value. */
 
 int
