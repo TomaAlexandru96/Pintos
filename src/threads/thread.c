@@ -4,6 +4,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include "devices/timer.h"
 #include "threads/fixed-point.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
@@ -24,6 +25,8 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+
+static struct list bsd_ready_lists[PRI_MAX + 1];
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -102,6 +105,11 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
 
+  /* Initialises multi-level priority queue */
+  for (int i = PRI_MIN; i <= PRI_MAX; i++)
+   {
+     list_init (&bsd_ready_lists[i]);
+   }
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -144,19 +152,29 @@ thread_tick (void)
     kernel_ticks++;
 
   /*If mlfqs is true and current thread not idle, increment recent_cpu*/
-  if (thread_current () != idle_thread && thread_mlfqs) {
-	  t->recent_cpu = add_fp_and_int(t->recent_cpu, 1);
-  }
+  if (thread_current () != idle_thread && thread_mlfqs)
+    {
+  	  t->recent_cpu = add_fp_and_int(t->recent_cpu, 1);
+    }
+
+  /* Recompute recent cpu and load_avg every second */
+  if (thread_mlfqs && timer_ticks () % TIMER_FREQ == 0)
+    {
+    	thread_compute_load_avg ();
+    	thread_foreach (&thread_compute_recent_cpu, NULL);
+    }
 
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
+    {
+      /*Recompute all priorities if mlfqs is true*/
+      if (thread_mlfqs)
+        {
+         thread_foreach (&compute_bsd_priority, NULL);
+        }
 
-	  /*Recompute all priorities if mlfqs is true*/
-	  	if (thread_mlfqs) {
-	  	 thread_foreach (&compute_bsd_priority, NULL);
-	  	}
-
-    intr_yield_on_return ();
+      intr_yield_on_return ();
+    }
 }
 
 /* Prints thread statistics. */
@@ -270,7 +288,14 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered (&ready_list, &t->elem, &priority_queue_sort, NULL);
+  if (thread_mlfqs)
+    {
+      list_push_back (&bsd_ready_lists[t->priority], &t->elem);
+    }
+  else
+    {
+      list_insert_ordered (&ready_list, &t->elem, &priority_queue_sort, NULL);
+    }
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -341,7 +366,17 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread)
-    list_insert_ordered (&ready_list, &cur->elem, &priority_queue_sort, NULL);
+    {
+      if (thread_mlfqs)
+        {
+          list_push_back (&bsd_ready_lists[cur->priority], &cur->elem);
+        }
+      else
+        {
+          list_insert_ordered (&ready_list, &cur->elem,
+            &priority_queue_sort, NULL);
+        }
+    }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -401,6 +436,12 @@ reset_thread_ready_list (struct thread *t)
 void
 thread_set_priority (int new_priority)
 {
+  if (thread_mlfqs)
+    {
+      thread_current ()->priority = new_priority;
+      return;
+    }
+
   if (thread_current ()->priority != thread_current ()->base_priority)
     {
       if (thread_current ()->priority < new_priority)
@@ -437,14 +478,14 @@ compute_bsd_priority (struct thread *t, void *aux UNUSED)
   max_priority = subtract_fp (max_priority, int_to_fp (t->nice * 2));
   int int_rounded_priority = fp_to_int_round_towards_zero (max_priority);
   if (int_rounded_priority > PRI_MAX)
-  {
-    int_rounded_priority = PRI_MAX;
-  }
+    {
+      int_rounded_priority = PRI_MAX;
+    }
 
   if (int_rounded_priority < PRI_MIN)
-  {
-    int_rounded_priority = PRI_MIN;
-  }
+    {
+      int_rounded_priority = PRI_MIN;
+    }
   t->priority = int_rounded_priority;
 }
 
@@ -459,13 +500,12 @@ thread_set_nice (int nice UNUSED)
   compute_bsd_priority(thread_current (), NULL);
 
   if (!list_empty(&ready_list))
-  {
-    struct thread * next_thread = list_entry (list_max (&ready_list,
-                                                 &compare_thread_priority, NULL),
-                                                 struct thread, elem);
-    if(thread_current ()->priority < next_thread->priority)
-      thread_yield ();
-  }
+    {
+      struct thread * next_thread = list_entry (list_max (&ready_list,
+                          &compare_thread_priority, NULL), struct thread, elem);
+      if(thread_current ()->priority < next_thread->priority)
+        thread_yield ();
+    }
 }
 
 /* Returns the current thread's nice value. */
@@ -623,15 +663,15 @@ init_thread (struct thread *t, const char *name, int priority)
 
   /* If thread_mlfqs true compute_bsd priority */
   if (thread_mlfqs)
-  {
-    compute_bsd_priority (t, NULL);
-  }
+    {
+      compute_bsd_priority (t, NULL);
+    }
   else
-  {
-	t->priority = priority;
-	t->base_priority = priority;
-    list_init (&t->holding_locks);
-  }
+    {
+	    t->priority = priority;
+	    t->base_priority = priority;
+      list_init (&t->holding_locks);
+    }
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

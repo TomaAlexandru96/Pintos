@@ -190,13 +190,6 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   wake_up();
   thread_tick ();
-
-  /* Recompute recent cpu and load_avg every second */
-  if (thread_mlfqs && timer_ticks () % TIMER_FREQ == 0)
-  {
-  	thread_compute_load_avg ();
-  	thread_foreach (&thread_compute_recent_cpu, NULL);
-  }
 }
 
 static void
