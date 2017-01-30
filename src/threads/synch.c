@@ -26,6 +26,8 @@
    MODIFICATIONS.
 */
 
+//TODO: add flags to switch to Advanced scheduler
+
 #include "threads/synch.h"
 #include <stdio.h>
 #include <string.h>
