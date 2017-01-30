@@ -24,6 +24,12 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/*Macros for advanced scheduler*/
+#define MIN_NICE -20
+#define DEFAULT_NICE 0
+#define MAX_NICE 20
+#define DEFAULT_RECENT_CPU 0
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -94,6 +100,9 @@ struct thread
     struct list holding_locks;          /* List of locks that the thead holds */
     struct list_elem allelem;           /* List element for all threads list. */
 
+    int nice;							/*Niceness value of thread*/
+    int32_t recent_cpu;					/*CPU time allocated*/
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
@@ -143,6 +152,8 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+void thread_compute_load_avg (void);
+void thread_compute_recent_cpu (struct thread *t, void *aux UNUSED)
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);

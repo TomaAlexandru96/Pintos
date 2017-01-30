@@ -1,6 +1,5 @@
-#ifndef THREADS_fIxED_POInT_H
-#define THREADs_fIxED_POInT_H
-
+#ifndef THREADS_FIXED_POINT_H
+#define THREADS_FIXED_POINT_H
 #include <stdint.h>
 
 /*Macros for 17.14 fixed-point number representation*/
