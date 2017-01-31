@@ -26,8 +26,6 @@
    MODIFICATIONS.
 */
 
-//TODO: add flags to switch to Advanced scheduler
-
 #include "threads/synch.h"
 #include <stdio.h>
 #include <string.h>
@@ -236,16 +234,22 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  thread_current ()->waiting_lock = NULL;
-  if (lock->holder != NULL)
+  if (!thread_mlfqs) 
     {
-      thread_current ()->waiting_lock = lock;
-      lock_donate (thread_current ());
+      thread_current ()->waiting_lock = NULL;
+      if (lock->holder != NULL)
+        {
+          thread_current ()->waiting_lock = lock;
+          lock_donate (thread_current ());
+        }
     }
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
-  list_push_back (&thread_current ()->holding_locks, &lock->elem);
+  if (!thread_mlfqs)
+    {
+      list_push_back (&thread_current ()->holding_locks, &lock->elem);
+    }
 }
 
 static void
@@ -293,31 +297,35 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-  list_remove (&lock->elem);
-  lock->holder->priority = lock->holder->base_priority;
-  if (list_size (&thread_current ()->holding_locks) > 0)
+  if (!thread_mlfqs)
     {
-      int maxPri = PRI_MIN - 1;
-      for (struct list_elem *e = list_begin (&thread_current ()->holding_locks);
-          e != list_end (&thread_current ()->holding_locks); e = list_next (e))
+      list_remove (&lock->elem);
+      lock->holder->priority = lock->holder->base_priority;
+      if (list_size (&thread_current ()->holding_locks) > 0)
         {
-          struct lock *l = list_entry (e, struct lock, elem);
-          struct list_elem *t_elem = sema_find_max_pri_waiter (&l->semaphore);
-          struct thread *max_pri_thread = list_entry (t_elem, struct thread, elem);
-          if (t_elem != NULL)
+          int maxPri = PRI_MIN - 1;
+          for (struct list_elem *e = list_begin (&thread_current ()->holding_locks);
+              e != list_end (&thread_current ()->holding_locks); e = list_next (e))
             {
-              int pri = max_pri_thread->priority;
-              if (pri > maxPri)
+              struct lock *l = list_entry (e, struct lock, elem);
+              struct list_elem *t_elem = sema_find_max_pri_waiter (&l->semaphore);
+              struct thread *max_pri_thread = list_entry (t_elem, struct thread, elem);
+              if (t_elem != NULL)
                 {
-                  maxPri = pri;
+                  int pri = max_pri_thread->priority;
+                  if (pri > maxPri)
+                    {
+                      maxPri = pri;
+                    }
                 }
             }
-        }
-      if (maxPri > lock->holder->base_priority)
-        {
-          lock->holder->priority = maxPri;
+          if (maxPri > lock->holder->base_priority)
+            {
+              lock->holder->priority = maxPri;
+            }
         }
     }
+
   lock->holder = NULL;
   sema_up (&lock->semaphore);
 }

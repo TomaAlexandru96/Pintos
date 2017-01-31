@@ -26,8 +26,6 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
-static struct list bsd_ready_lists[PRI_MAX + 1];
-
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -105,11 +103,6 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&all_list);
 
-  /* Initialises multi-level priority queue */
-  for (int i = PRI_MIN; i <= PRI_MAX; i++)
-   {
-     list_init (&bsd_ready_lists[i]);
-   }
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
   init_thread (initial_thread, "main", PRI_DEFAULT);
@@ -288,14 +281,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  if (thread_mlfqs)
-    {
-      list_push_back (&bsd_ready_lists[t->priority], &t->elem);
-    }
-  else
-    {
-      list_insert_ordered (&ready_list, &t->elem, &priority_queue_sort, NULL);
-    }
+  list_insert_ordered (&ready_list, &t->elem, &priority_queue_sort, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -367,15 +353,8 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread)
     {
-      if (thread_mlfqs)
-        {
-          list_push_back (&bsd_ready_lists[cur->priority], &cur->elem);
-        }
-      else
-        {
-          list_insert_ordered (&ready_list, &cur->elem,
+      list_insert_ordered (&ready_list, &cur->elem,
             &priority_queue_sort, NULL);
-        }
     }
   cur->status = THREAD_READY;
   schedule ();
