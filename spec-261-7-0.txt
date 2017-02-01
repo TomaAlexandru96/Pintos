@@ -10,7 +10,7 @@
 
 FirstName LastName <email@domain.example>
 FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Rishiraj Bheenick <rnb14@imperial.ac.uk>
 
 ---- PRELIMINARIES ----
 
@@ -72,6 +72,18 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Struct members in thread.h:
+ struct thread
+ {
+ ...
+ 	int nice;					/*Niceness value of thread*/
+    int32_t recent_cpu;			/*CPU time allocated*/
+ ...
+ }
+
+ Static variables in thread.c:
+ int32_t load_avg;				/*Stores the system load average*/
+
 ---- ALGORITHMS ----
 
 >> B2: (5 marks)
@@ -83,25 +95,42 @@ FirstName LastName <email@domain.example>
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
-16
-20
-24
-28
-32
-36
+ 0		0	0	0  63  61  58	  A
+ 4		4	0 	0  62  61  59     A
+ 8		8   0   0  61  61  59     B	
+12		8   4   0  61  60  59     A
+16	   12   4   0  60  60  59     B
+20	   12   8   0  60  59  59     A
+24	   16   8   0  59  59  59     C
+28	   16  12   0  59  59  58     B
+32     16  12   4  59  58  58     A
+36	   20  12   4  58  58  58     C
 
 >> B3: (5 marks) 
 >> Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behaviour of your scheduler?
 
+The specifications only mention that the recent_cpu must be incremented
+and the priority for each thread must be computed on the same timer tick.
+However it does not mention in which order to do so.
+
+In our implementation, the recent_cpu value of the current thread is
+incremented first, then the priority of the threads are calculated 
+using this new recent_cpu value.
+
+The values in the table above matches the behaviour of our scheduler.
+The recent_cpu for the current thread is incremented after each tick,
+and after every 4 ticks, the priorities for each thread is recomputed.
+The highest priority thread will run unless multiple threads have the 
+same highest priority. In that case, the thread which has not run for 
+longest time since it was last scheduled will become the running thread.
+
 >> B4: (5 marks)
 >> How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
+
+
 
 ---- RATIONALE ----
 
@@ -109,10 +138,27 @@ ticks   A   B   C   A   B   C   to run
 >> Briefly critique your design, pointing out advantages and
 >> disadvantages in your design choices.
 
+
+
 >> B6: (5 marks)
 >> The assignment explains arithmetic for fixed-point mathematics in
 >> detail, but it leaves it open to you to implement it.  Why did you
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point mathematics, that is, an abstract
 >> data type and/or a set of functions or macros to manipulate
->> fixed-point numbers, why did you do so?  If not, why not?S
+>> fixed-point numbers, why did you do so?  If not, why not?
+
+The fixed-point arithmetics have been implemented by creating macros for 
+all the operations given in the specs. This enabled the calculations to 
+be done within the code without having to rewrite the formulae given in 
+the spec every time. It also improve readability of the code since the 
+names of the macros clearly explain what it does. The risk of mistakes in the calculations is also minimised compared to if the operations were
+directly applied each time using the formulae in the specs since they 
+are only written once in the file fixed-point.h. Fixing a bug in the 
+operations when using macros would be much easier as we only have to modify
+them in fixed-point.h.
+
+The fixed-point arithmetic may have done by implementing 
+functions for each operations. However, function calls would introduce a
+runtime overhead. However, when using macros, the compiler replaces them 
+with the actual values at compile time.
