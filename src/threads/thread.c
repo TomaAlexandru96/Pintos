@@ -61,8 +61,8 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 
-/*System load average*/
-int32_t load_avg;
+/* System load average */
+static int32_t load_avg;
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -447,11 +447,13 @@ thread_set_priority (int new_priority)
 
   /* Check if new_priority is no longer the biggest priority by comparing it
      with the maximum value from the ready_list. */
+  enum intr_level old_level = intr_disable ();
   if (!list_empty (&ready_list) && new_priority <
         list_entry (list_front (&ready_list), struct thread, elem)->priority)
     {
       thread_yield ();
     }
+  intr_set_level (old_level);
 }
 
 /* Returns the current thread's priority. */
