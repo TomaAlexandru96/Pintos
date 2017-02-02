@@ -208,13 +208,13 @@ Struct members in thread.h:
   struct thread
   {
   ...
-  	int nice;				                 	/*Niceness value of thread*/
-    int32_t recent_cpu;               /*CPU usage time allocated*/
+  	int nice;				                 	/* Niceness value of thread */
+    int32_t recent_cpu;               /* CPU usage time allocated */
   ...
   }
 
 Static variables in thread.c:
-  int32_t load_avg;                  /*Stores the system load average*/
+  static int32_t load_avg;            /* Stores the system load average */
 
 ---- ALGORITHMS ----
 
@@ -227,7 +227,7 @@ Static variables in thread.c:
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
-0       0   0   0  63  61  58     A
+0       0   0   0  63  61  59     A
 4       4   0   0  62  61  59     A
 8       8   0   0  61  61  59     B
 12      8   4   0  61  60  59     A
@@ -237,7 +237,6 @@ ticks   A   B   C   A   B   C   to run
 28     16  12   0  59  59  58     B
 32     16  12   4  59  58  58     A
 36     20  12   4  58  58  58     C
-
 
 >> B3: (5 marks)
 >> Did any ambiguities in the scheduler specification make values
@@ -249,10 +248,10 @@ and the priority for each thread must be computed on the same timer tick.
 However it does not mention in which order to do so.
 
 In our implementation, the recent_cpu value of the current thread is
-incremented first, then the priority of the threads are calculated
+incremented first, then the priorities of the threads are calculated
 using this new recent_cpu value using compute_bsd_priority.
 
-The values in the table above matches the behaviour of our scheduler.
+The values in the table above match the behaviour of our scheduler.
 The recent_cpu for the current thread is incremented after each tick,
 and after every 4 ticks, the priorities for each thread is recomputed.
 The highest priority thread will run unless multiple threads have the
@@ -287,7 +286,7 @@ change when while recalculating the priorities for each thread.
 >> Briefly critique your design, pointing out advantages and
 >> disadvantages in your design choices.
 Advantages:
-The design is simple and easy to read. The funtions implemented are very
+The design is simple and easy to read. The functions implemented are very
 explicit and it is easy to understand what they do.
 The fixed-point arithmetic have been implemented efficiently using macros which
 improves readability of the code.
@@ -300,7 +299,7 @@ calculations outside the interrupt context without compromising the behaviour of
 the advanced scheduler.
 
 The operations on the ready_list require O(n) and sorting the list requires
-O(nlogn). We could have used more efficient data stuctures instead of lists.
+O(nlogn). We could have used more efficient data structures instead of lists.
 
 >> B6: (5 marks)
 >> The assignment explains arithmetic for fixed-point mathematics in
@@ -310,7 +309,7 @@ O(nlogn). We could have used more efficient data stuctures instead of lists.
 >> data type and/or a set of functions or macros to manipulate
 >> fixed-point numbers, why did you do so?  If not, why not?S
 
-The fixed-point arithmetics have been implemented by creating macros for
+The fixed-point arithmetic have been implemented by creating macros for
 all the operations given in the specs. This enabled the calculations to
 be done within the code without having to rewrite the formulae given in
 the spec every time. It also improve readability of the code since the
