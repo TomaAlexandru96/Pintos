@@ -10,7 +10,7 @@
 
 FirstName LastName <email@domain.example>
 FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Rishiraj Bheenick <rnb14@imperial.ac.uk>
 
 ---- PRELIMINARIES ----
 
@@ -45,7 +45,7 @@ struct thread
     struct list holding_locks;          /* List of locks that the thread holds */
     struct list_elem allelem;           /* List element for all threads list. */
 
-    int nice;							/*Niceness value of thread*/
+    int nice;							      /*Niceness value of thread*/
     int32_t recent_cpu;					/*CPU time allocated*/
 
     /* Shared between thread.c and synch.c. */
@@ -128,11 +128,11 @@ Struct members in thread.h:
   {
   ...
   	int nice;				                 	/*Niceness value of thread*/
-     int32_t recent_cpu;		        	/*CPU time allocated*/
+    int32_t recent_cpu;               /*CPU usage time allocated*/
   ...
   }
 
-  Static variables in thread.c:
+Static variables in thread.c:
   int32_t load_avg;                  /*Stores the system load average*/
 
 ---- ALGORITHMS ----
@@ -169,7 +169,7 @@ However it does not mention in which order to do so.
 
 In our implementation, the recent_cpu value of the current thread is
 incremented first, then the priority of the threads are calculated
-using this new recent_cpu value.
+using this new recent_cpu value using compute_bsd_priority.
 
 The values in the table above matches the behaviour of our scheduler.
 The recent_cpu for the current thread is incremented after each tick,
@@ -182,11 +182,44 @@ longest time since it was last scheduled will become the running thread.
 >> How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
 
+The advanced scheduler runs mostly inside the interrupt context since the
+load_avg and recent_cpu for each thread must be computed every second using
+compute_load_avg and compute_recent_cpu. If this was done outside the interrupt
+context, the timer tick could interrupt the thread and the values would not be
+computed at the correct time.
+
+The thread priorities for the advanced scheduler is also computed inside the
+interrupt context after every 4 ticks. This ensures that the priorities for all
+the threads are recomputed before running the scheduler and hence the correct
+next thread to run can be chosen. If it was done outside the interrupt context,
+an interruption might cause only some of the priorities to be recomputed and
+the a wrong next thread to run might be chosen.
+
+However doing all the calculations inside the interrupt context may prevent
+other interrupts from occurring, hence giving the interrupted thread less time
+to run. But the values need to computed at very specific times and must not
+change when while recalculating the priorities for each thread.
+
 ---- RATIONALE ----
 
 >> B5: (5 marks)
 >> Briefly critique your design, pointing out advantages and
 >> disadvantages in your design choices.
+Advantages:
+The design is simple and easy to read. The funtions implemented are very
+explicit and it is easy to understand what they do.
+The fixed-point arithmetic have been implemented efficiently using macros which
+improves readability of the code.
+
+Disadvantages:
+Most of the values required for the advanced scheduler are computed inside the
+interrupt context and this is not a really optimal choice for reasons mentioned
+in B4. So a possible improvement would be to try to move some of the
+calculations outside the interrupt context without compromising the behaviour of
+the advanced scheduler.
+
+The operations on the ready_list require O(n) and sorting the list requires
+O(nlogn). We could have used more efficient data stuctures instead of lists.
 
 >> B6: (5 marks)
 >> The assignment explains arithmetic for fixed-point mathematics in
