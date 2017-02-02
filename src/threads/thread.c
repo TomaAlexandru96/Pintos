@@ -281,6 +281,7 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
+  /* Insert thread t in the ready_list based on it's priority */
   list_insert_ordered (&ready_list, &t->elem, &priority_queue_sort, NULL);
   t->status = THREAD_READY;
   intr_set_level (old_level);
@@ -357,6 +358,7 @@ thread_yield (void)
             &priority_queue_sort, NULL);
     }
   cur->status = THREAD_READY;
+  /* Go in the scheduler and make the highest priority thread run */
   schedule ();
   intr_set_level (old_level);
 }
@@ -378,6 +380,8 @@ thread_foreach (thread_action_func *func, UNUSED void *aux)
     }
 }
 
+/* A comparator function used when inserting in a list based on priority.
+   The insertion is made in ascendant order based on the value of priority. */
 static bool
 priority_queue_sort (const struct list_elem *a,
                      const struct list_elem *b,
@@ -388,7 +392,8 @@ priority_queue_sort (const struct list_elem *a,
   return a_thread->priority > b_thread->priority;
 }
 
-/* compares priority of 2 threads in ready_list */
+/* Compares priority of 2 threads in ready_list.
+   Returns true if tread b has higher priority than thread a, false otherwise.*/
 static bool
 compare_thread_priority (const struct list_elem *a,
                     	 const struct list_elem *b,
@@ -401,11 +406,15 @@ compare_thread_priority (const struct list_elem *a,
   return a_thread->priority < b_thread->priority;
 }
 
+/* Called when a thread t changes priority and you want to still be at the
+   right position within the ready_list. */
 void
 reset_thread_ready_list (struct thread *t)
 {
   list_remove (&t->elem);
+  /* Insert back in the ready_list thread t. */
   list_insert_ordered (&ready_list, &t->elem, &priority_queue_sort, NULL);
+  /* Checks if thread t is still the one with highest priority. */
   if (t->priority > thread_current ()->priority) {
     thread_yield ();
   }
@@ -421,8 +430,10 @@ thread_set_priority (int new_priority)
       return;
     }
 
+  /* When we are dealing with a donation */
   if (thread_current ()->priority != thread_current ()->base_priority)
     {
+      /* If the new_priority is bigger than priority, set it to new_priority. */
       if (thread_current ()->priority < new_priority)
         {
           thread_current ()->priority = new_priority;
@@ -433,6 +444,9 @@ thread_set_priority (int new_priority)
       thread_current ()->priority = new_priority;
     }
   thread_current ()->base_priority = new_priority;
+
+  /* Check if new_priority is no longer the biggest priority by comparing it
+     with the maximum value from the ready_list. */
   if (!list_empty (&ready_list) && new_priority <
         list_entry (list_front (&ready_list), struct thread, elem)->priority)
     {
@@ -447,8 +461,8 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
-/*Computes thread priorities for the bsd schduler:
-  bsd_priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)*/
+/* Computes thread priorities for the bsd schduler based on the formula:
+   bsd_priority = PRI_MAX - (recent_cpu / 4) - (nice * 2) */
 void
 compute_bsd_priority (struct thread *t, void *aux UNUSED)
 {
@@ -458,11 +472,16 @@ compute_bsd_priority (struct thread *t, void *aux UNUSED)
   max_priority = subtract_fp (max_priority, recent_cpu);
   max_priority = subtract_fp (max_priority, int_to_fp (t->nice * 2));
   int int_rounded_priority = fp_to_int_round_towards_zero (max_priority);
+
+  /* If the rounded priority is bigger than the maximum value allowed, set it to
+     the max priority allowed (63). */
   if (int_rounded_priority > PRI_MAX)
     {
       int_rounded_priority = PRI_MAX;
     }
 
+  /* If the rounded priority is smaller than the minimum value allowed, set it
+     to the min priority allowed (0). */
   if (int_rounded_priority < PRI_MIN)
     {
       int_rounded_priority = PRI_MIN;
@@ -484,6 +503,8 @@ thread_set_nice (int nice UNUSED)
     {
       struct thread * next_thread = list_entry (list_max (&ready_list,
                           &compare_thread_priority, NULL), struct thread, elem);
+      /* If the current thread is no longer the one with the highest priority
+         yield and change the current running thread. */
       if(thread_current ()->priority < next_thread->priority)
         thread_yield ();
     }
@@ -644,7 +665,7 @@ init_thread (struct thread *t, const char *name, int priority)
   /*Set initial nice and recent_cpu values to 0*/
   t->nice = DEFAULT_NICE;
   t->recent_cpu = DEFAULT_RECENT_CPU;
-  
+
   t->magic = THREAD_MAGIC;
 
   /* If thread_mlfqs true compute_bsd priority */

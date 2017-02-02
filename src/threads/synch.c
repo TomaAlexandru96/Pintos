@@ -71,6 +71,8 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0)
     {
+      /* Push the current thread on the list of waiting threads
+         for the semaphore. */
       list_push_back (&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
@@ -104,11 +106,13 @@ sema_try_down (struct semaphore *sema)
   return success;
 }
 
+/* Iterate through the list of threads waiting for the lock and get the thread
+   with the maximum priority. */
 static struct list_elem *
 sema_find_max_pri_waiter (struct semaphore *sema)
 {
   struct list_elem *el = NULL;
-  int maxPri = PRI_MIN - 1;
+  int maxPri = PRI_MIN - 1; /* maxPri = -1 */
 
   for (struct list_elem *e = list_begin (&sema->waiters);
         e != list_end (&sema->waiters); e = list_next (e))
@@ -135,6 +139,9 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
+
+  /* If there are threads waiting for the semaphore, get the one with max
+     priority and notify it. */
   if (!list_empty (&sema->waiters))
     {
       struct list_elem *el = sema_find_max_pri_waiter (sema);
@@ -234,7 +241,7 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
-  if (!thread_mlfqs) 
+  if (!thread_mlfqs)
     {
       thread_current ()->waiting_lock = NULL;
       if (lock->holder != NULL)
@@ -414,8 +421,9 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   if (!list_empty (&cond->waiters))
     {
       struct list_elem *sema_el = NULL;
-      int maxPri = PRI_MIN - 1;
+      int maxPri = PRI_MIN - 1; /* maxPri = -1 */
 
+      /* Iterare through the list of waiting threads and notify them.  */
       for (struct list_elem *e = list_begin (&cond->waiters);
                   e != list_end (&cond->waiters); e = list_next (e))
         {
