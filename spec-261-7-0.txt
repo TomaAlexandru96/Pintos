@@ -67,9 +67,9 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
   };
 
-  base_priority keeps the original priority of the thread before donation.
+  base_priority keeps track of the original priority of the thread before donation.
   the value of priority is reset to base_priority whenever the current thread
-  releases the lock.
+  releases a lock.
 
   waiting_lock keeps a pointer to the lock the thread is waiting for.
 
@@ -89,9 +89,9 @@ struct lock
 >> Explain the data structure used to track priority donation.
 >> Give a diagram that illustrates a nested donation in your structure.
 
-When using priority donations we create a tree like structure for a thread.
-A tread keeps a reference to the lock is waiting for and a list of locks which
-it holds.
+When using priority donations we create a tree-like structure for a thread.
+A thread keeps a reference to the lock it is waiting for and a list of locks which
+it holds, allowing us to easily deal with priority donation.
 
                +--------+
                |        |
@@ -115,11 +115,11 @@ Thread 2 (Priority 10) holding_locks -> [Lock B]
 Thread 3 (Priority 20) holding_locks -> []
                        waiting_lock  -> Lock B
 
-Therefore Thread 3 goes to its parent lock (waiting_lock) and donate its priority
-and Thread 2 donates its effective priority (which is now 20) to Thread 1.
+In the above example, Thread 3 goes to its parent lock (waiting_lock) and donates 
+its priority and Thread 2 donates its effective priority (which is now 20) to Thread 1.
 
 In the case of multiple donations we use the holding_locks to search for the
-lock which blocks the highest priority thread and donate its priority.
+lock which blocks the highest priority thread, and donate its priority.
 
 ---- ALGORITHMS ----
 
@@ -127,15 +127,14 @@ lock which blocks the highest priority thread and donate its priority.
 >> How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
-When a semaphore releases a thread when its upped we use sema_find_max_pri_waiter()
+When a semaphore releases a thread (i.e. when upped), we use the sema_find_max_pri_waiter()
 function to iterate through the list of blocked threads and find the highest
-priority thread which will be released.
+priority thread, which will then be released.
 
-When a lock gets released, we iterate through the holding_locks list and for
-each lock we use sema_find_max_pri_waiter() function to pick the thread with the
-highest priority in the semaphore member's waiting list.
+When a lock is released, we find the maximum priority thread waiting on its semaphore using
+the method above.
 
-When a condition is signalled we iterate through the list of semaphores that a
+When a condition variable is signalled we iterate through the list of semaphores that a
 condition variable holds and up the semaphore that blocks the highest priority
 thread.
 
@@ -143,28 +142,29 @@ thread.
 >> Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
-When lock_acquire() gets called we use lock_donate(). If nothing is waiting for
-the lock, then we return.
-lock_donate() checks if the priority of the current thread is higher than the
-priority of the thread that holds the lock that it tries to acquire. If the
-priority of the current thread is higher than that of the thread holding the lock,
-then we set the priority of the thread holding the lock to the current thread's
-priority. We then call lock_donate() on the thread holding the lock, therefore
-recursively checking if the thread holding the current lock is itself waiting
-for a lock with a lower priority.
+When lock_acquire() is called and the lock holder is not null,  we call lock_donate(). 
+
+If nothing is waiting for the lock, then we return. lock_donate() then checks if the priority 
+of the current thread is higher than the priority of the thread that holds the lock 
+that it tries to acquire. If this is the case, we set the priority of the thread holding the 
+lock to the current thread's priority. We then call lock_donate() on the thread holding the lock, 
+therefore recursively checking if this thread is itself waiting for a lock with a lower priority.
 
 >> A5: (5 marks)
 >> Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
 
 When lock_release() is called, we need to pick the highest priority thread to
-run. To do this, we iterate through all the locks that holding thread holds.
-For each lock we use sema_find_max_pri_waiter() to get the highest priority
+run; to do this we iterate through all the locks that holding thread holds.
+For each lock we use sema_find_max_pri_waiter() to find the highest priority
 thread waiting on this lock, and use this information to find the maximum
-priority thread waiting on any lock held by the holding thread. And after we have
-found the maximum priority we check it against the holding thread priority. We then
-set the holding thread's priority to the maximum of the searched maximum priority or
-its base priority.
+priority thread waiting on any lock held by the holding thread. 
+
+After we have found the maximum priority, we check it against the holding thread's priority. 
+We then set the holding thread's priority to the maximum of the max priority found in our 
+search and the holding thread's base priority base priority.
+
+Finally we set the lock holder to null and up the lock's semaphore.
 
 ---- SYNCHRONIZATION ----
 
@@ -173,10 +173,11 @@ its base priority.
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
-We disable interrupts in order to read atomically from the ready_list.
-We can't use a lock because the current thread will yield if it gets into
-the if statement and it would have to use priority donation in order to release
-the lock.
+We disable interrupts in order to read atomically from the ready_list, which is the only shared
+resource in the thread_set_priority() function.
+
+We cannot use a lock here as the current thread may yield and we would have to use priority donation 
+in order to release the lock.
 
 ---- RATIONALE ----
 
@@ -184,15 +185,15 @@ the lock.
 >> Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
 
-Initially, we considered yt o use the ready list as it was undorderd, but
-we decided to make it oredered such that the time to look up for ythe max priority
-thread is O(1), by looking for the first element in the list.
+Initially we considered using the ready list as it was unorderd, but decided to make it ordered 
+such that the time taken to look up the max priority thread is O(1) as we can select the first element 
+in the list.
 
-Afterwards, for priority donations, we condidered using a hash map for
-storing the locks lists for each thread, but instead we decided to put the list
-on the thread struct. This had the advantage that was easier to implement.
-Furthermore, this had the advantage that the lists of locks were encapsulated
-to each thread struct, so it was a less error prone design.
+For priority donations we conidered using a hash map for storing the holding_locks list for 
+each thread, but instead decided to put the list on the thread struct. This had the 
+advantage that it was easier to implement. Furthermore, this had the advantage that the 
+lists of locks were encapsulated to each thread struct, allowing for a less error prone and
+more atomic design.
 
               ADVANCED SCHEDULER
               ==================
