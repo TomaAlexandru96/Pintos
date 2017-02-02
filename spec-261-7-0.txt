@@ -72,17 +72,13 @@ struct thread
 
   holding_locks is a pointer to a list of the locks that a thread holds.
 
-
-
-
-
-
-
-
-
 >> A2: (10 marks)
 >> Explain the data structure used to track priority donation.
 >> Give a diagram that illustrates a nested donation in your structure.
+
+We use a list that holds the locks the thread owns.
+
+
 
 ---- ALGORITHMS ----
 
@@ -90,15 +86,39 @@ struct thread
 >> How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
-we always add threads to the ready_list using a round robin method. Therefore
+When we call thread_unblock(), we do an oredered insertion to the ready_list,
+in a round robin fashion, therefore the thread with the highest priority will
+always be inserted at the end of the ready_list. When lock_acquire() is called,
+
+
+When a lock gets released, we iterate through the holding_locks list and for
+each lock we use sema_find_max_pri_waiter function to pick the thread with the
+highest priority in the semaphore member's waiting list.
 
 >> A4: (5 marks)
 >> Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
+When lock_acquire() gets called we use lock_donate(). If nothing is waiting for
+the lock, then we return.
+lock_donate() checks if the priority of the current thread is higher than the
+priority of the thread that holds the lock that it tries to acquire. If the
+priority of current thread is higher than that of the thread holding the lock,
+then we set the priority of the thread holding the lock to current thread's
+priority. We then recursively call lock_donate on the thread holding this lock,
+therefore recursively checking if the thread holding the current lock is itself
+waiting for a lock with a lower priority.
+
 >> A5: (5 marks)
 >> Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+When lock_release() is called, we need to pick the highest priority thread to
+run. To do this, we iterate through all the locks that holding thread holds.
+For each lock we use sema_find_max_pri_waiter() to get the highest priority
+thread waiting on this lock, and use this information to find the maximum
+priority thread waiting on any lock held by the holding thread.
+
 
 ---- SYNCHRONIZATION ----
 
