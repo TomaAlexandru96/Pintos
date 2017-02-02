@@ -173,11 +173,26 @@ its base priority.
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+We disable interrupts in order to read atomically from the ready_list.
+We can't use a lock because the current thread will yield if it gets into
+the if statement and it would have to use priority donation in order to release
+the lock.
+
 ---- RATIONALE ----
 
 >> A7: (5 marks)
 >> Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+Initially, we considered yt o use the ready list as it was undorderd, but
+we decided to make it oredered such that the time to look up for ythe max priority
+thread is O(1), by looking for the first element in the list.
+
+Afterwards, for priority donations, we condidered using a hash map for
+storing the locks lists for each thread, but instead we decided to put the list
+on the thread struct. This had the advantage that was easier to implement.
+Furthermore, this had the advantage that the lists of locks were encapsulated
+to each thread struct, so it was a less error prone design.
 
               ADVANCED SCHEDULER
               ==================
