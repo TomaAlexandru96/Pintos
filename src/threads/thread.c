@@ -447,6 +447,8 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
+/*Computes thread priorities for the bsd schduler:
+  bsd_priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)*/
 void
 compute_bsd_priority (struct thread *t, void *aux UNUSED)
 {
@@ -495,7 +497,8 @@ thread_get_nice (void)
   return thread_current ()->nice;
 }
 
-/* Computes current load_avg */
+/* Computes current load_avg:
+   load_avg = (59/60)*load_avg + (1/60)*ready_threads */
 void
 thread_compute_load_avg (void)
 {
@@ -524,8 +527,8 @@ thread_get_load_avg (void)
   return round_load_avg;
 }
 
-/* Computes recent cpu usage. */
-
+/* Computes recent cpu usage:
+   recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice */
 void
 thread_compute_recent_cpu (struct thread *t, void *aux UNUSED)
 {
@@ -638,6 +641,10 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
 
+  /*Set initial nice and recent_cpu values to 0*/
+  t->nice = DEFAULT_NICE;
+  t->recent_cpu = DEFAULT_RECENT_CPU;
+  
   t->magic = THREAD_MAGIC;
 
   /* If thread_mlfqs true compute_bsd priority */

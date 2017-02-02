@@ -100,8 +100,8 @@ struct thread
     struct list holding_locks;          /* List of locks that the thead holds */
     struct list_elem allelem;           /* List element for all threads list. */
 
-    int nice;							/*Niceness value of thread*/
-    int32_t recent_cpu;					/*CPU time allocated*/
+    int nice;                           /*Niceness value of thread*/
+    int32_t recent_cpu;                 /*CPU time allocated*/
 
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
