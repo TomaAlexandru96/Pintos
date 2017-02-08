@@ -245,6 +245,23 @@ thread_create (const char *name, int priority,
       thread_yield ();
     }
 
+  #ifdef USERPROG
+  sema_init (&t->sema_process_wait, 0);
+  sema_init (&t->sema_process_exit, 0);
+  t->return_status = DEFAULT_RET_STATUS;
+    
+  list_init (&t->children_processes);
+  t->has_exited = false;
+  t->parent = thread_current ();
+
+  if (thread_current () != initial_thread)
+    {
+      list_push_back (&thread_current ()->children_processes, 
+                      &t->child_process);
+    }
+  #endif
+
+
   return tid;
 }
 
@@ -320,6 +337,24 @@ thread_tid (void)
   return thread_current ()->tid;
 }
 
+/* Returns the thread given the tid from list of all threads */
+struct thread *
+get_thread_from_tid (tid_t tid)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list); 
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      if (t->tid == tid)
+        return t;
+    }
+    
+  return NULL;
+}
+
+
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
 void
@@ -328,7 +363,30 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+  struct list_elem *e;
+  struct thread *current = thread_current ();
+
+  for (e = list_begin (&current->children_processes); 
+       e != list_end (&current->children_processes); 
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, child_process);
+      if (t->has_exited == true)
+        {
+          sema_up (&t->sema_process_exit);
+        }
+      else
+        {
+          t->parent = NULL;
+          list_remove (&t->child_process);
+        }
+    }
+  
   process_exit ();
+  
+  if (current->parent != NULL && current->parent != initial_thread)
+  list_remove (&current->child_process);
+
 #endif
 
   /* Remove thread from all threads list, set our status to dying,

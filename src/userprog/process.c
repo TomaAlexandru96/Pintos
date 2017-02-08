@@ -30,6 +30,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
+  struct thread *t;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -41,7 +42,19 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    {
+      palloc_free_page (fn_copy); 
+      return tid;
+    }
+
+  t = get_thread_from_tid (tid);
+  sema_down (&t->sema_process_wait);
+
+  if (t->return_status == ERROR_RET_STATUS)
+    tid = TID_ERROR;
+  while (t->status == THREAD_BLOCKED)
+    thread_unblock (t);
+
   return tid;
 }
 
@@ -53,7 +66,7 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-
+  struct thread *current;
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -61,10 +74,28 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  current = thread_current ();
+  if (success)
+    {
+       sema_up (&current->sema_process_wait);
+       intr_disable ();
+       thread_block ();
+       intr_enable (); 
+    }
+  else
+    {
+       current->return_status = ERROR_RET_STATUS;
+       sema_up (&current->sema_process_wait);
+       intr_disable ();
+       thread_block ();
+       intr_enable ();
+       thread_exit ();
+    }
+
+
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -86,9 +117,32 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+   struct thread *t;
+   struct thread *current;
+
+   current = thread_current ();
+   t = get_thread_from_tid (child_tid);
+
+   if (t == NULL || t->has_exited == true || t->parent != current)
+    {
+       return ERROR_RET_STATUS;
+    }   
+   else if (t->return_status != DEFAULT_RET_STATUS)
+    {
+
+       return t->return_status;
+    }
+
+   sema_down (&t->sema_process_wait);
+    
+   int return_value = t->return_status;
+   printf ("%s: exit(%d)\n", t->name, t->return_status);
+
+   sema_up (&t->sema_process_exit);
+
+   return return_value;
 }
 
 /* Free the current process's resources. */
@@ -97,6 +151,16 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  while (!list_empty (&cur->sema_process_wait.waiters))
+         sema_up (&cur->sema_process_wait);
+  
+  cur->has_exited = true;
+  if (cur->parent != NULL)
+    {
+      sema_down (&cur->sema_process_exit); 
+    }
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
