@@ -29,6 +29,9 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  char *fn_copy_2;
+  char *name;
+  char *save_file;
   tid_t tid;
   struct thread *t;
 
@@ -39,15 +42,22 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  fn_copy_2 = palloc_get_page (0);
+  if (fn_copy_2 == NULL)
+    return TID_ERROR;
+  strlcpy (fn_copy_2, file_name, PGSIZE);
+  
+  name = strtok_r (fn_copy_2, " ", &save_file);
+  
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     {
       palloc_free_page (fn_copy); 
       return tid;
     }
 
-  t = get_thread_from_tid (tid);
+   t = get_thread_from_tid (tid);
   sema_down (&t->sema_process_wait);
 
   if (t->return_status == ERROR_RET_STATUS)
@@ -56,6 +66,7 @@ process_execute (const char *file_name)
     thread_unblock (t);
 
   return tid;
+    
 }
 
 /* A thread function that loads a user process and starts it
@@ -66,13 +77,75 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  char *save_file;
+  char *name_token;
+  int i;
+  int argc = 0;
+  char* argv[100]; 
+  intptr_t stack_ptr;
   struct thread *current;
+
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  
+  /* Extract name of file. */
+  name_token = strtok_r (file_name, " ", &save_file);
+ 
+  success = load (name_token, &if_.eip, &if_.esp);
+
+  stack_ptr = (intptr_t) if_.esp;
+
+  /* Parse string and push each token on the stack. */
+  do
+    {
+      argv[argc] = name_token;
+      argc++;
+      size_t length = strlen (name_token);
+      stack_ptr = (intptr_t) (((char*) stack_ptr)- (length + 1));
+      strlcpy ((char*)stack_ptr, name_token, length + 1);
+      hex_dump (0xbfffffcc, (void *) 0xbfffffcc, 68, true);
+ 
+      name_token = strtok_r (NULL, " ", &save_file);
+    } while (name_token != NULL);
+
+  /* Round down stack_ptr to multiple of 4. */
+  stack_ptr &= MULT_OF_FOUR_MASK;
+
+  /* Push null sentinel on stack. */
+  stack_ptr = (intptr_t) (((char*) stack_ptr) - 1);
+  *((char*)(stack_ptr)) = 0;
+  
+  /* Push pointers to args on stack. */    
+  for (i = argc - 1; i >= 0; --i)
+    {
+      hex_dump (0xbfffffcc, (void *) 0xbfffffcc, 68, true);
+      stack_ptr = (intptr_t) (((char*) stack_ptr) - 1);
+      *((char**) stack_ptr) = argv[i];
+      hex_dump (0xbfffffcc, (void *) 0xbfffffcc, 68, true);
+    } 
+
+  /* Push argv on stack. */
+  stack_ptr = (intptr_t) (((char**) stack_ptr) - 1);
+  *((char***) stack_ptr) = &argv[0];
+  hex_dump (0xbfffffcc, (void *) 0xbfffffcc, 68, true);
+
+  /* Push argc on stack. */
+  stack_ptr = (intptr_t) (((int) stack_ptr) - 1);
+  *((int*) stack_ptr) = argc;
+  hex_dump (0xbfffffcc, (void *) 0xbfffffcc, 68, true);
+
+  /* Push null sentinel onto stack */
+  stack_ptr = (intptr_t) (((void*) stack_ptr) - 1);
+  *((void**)(stack_ptr)) = 0;
+  hex_dump (0xbfffffcc, (void *) 0xbfffffcc, 68, true);
+
+  if_.esp = (void *) stack_ptr;
+
+  hex_dump (0xbfffffcc, (void *) 0xbfffffcc, 68, true);
 
   current = thread_current ();
   if (success)
@@ -92,9 +165,13 @@ start_process (void *file_name_)
        thread_exit ();
     }
 
-
   /* If load failed, quit. */
   palloc_free_page (file_name);
+
+  if (!success) 
+    {
+      thread_exit ();
+    }
   
 
   /* Start the user process by simulating a return from an
@@ -504,7 +581,7 @@ setup_stack (void **esp)
         /* Temporary change to PHYS_BASE - 12.
            Will work for test programs that does not examine 
            arguments */
-        *esp = PHYS_BASE - 12;
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }
