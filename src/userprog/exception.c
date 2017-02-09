@@ -152,7 +152,7 @@ page_fault (struct intr_frame *f)
      0xffffffff and copies the old value into eip */
   if (!user)
     {
-      f->eip = f->eax;
+      f->eip = (void*) f->eax;
       f->eax = 0xffffffff;
     }
 
