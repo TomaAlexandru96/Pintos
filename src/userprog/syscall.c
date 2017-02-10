@@ -21,8 +21,6 @@ typedef int pid_t;
 static void syscall_handler (struct intr_frame *);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
-<<<<<<< HEAD
-=======
 
 static void halt (void);
 static void exit (int status);
@@ -41,7 +39,6 @@ static void close (int fd);
 static struct lock file_lock;
 typedef int (*handler) (uint32_t, uint32_t, uint32_t);
 static handler syscall_map[32];
->>>>>>> 0ee3583da8a2d5471693a728deb72a054c31b762
 
 void
 syscall_init (void)
