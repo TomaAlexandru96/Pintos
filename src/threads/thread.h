@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -25,10 +26,16 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 /*Macros for advanced scheduler*/
-#define MIN_NICE -20
 #define DEFAULT_NICE 0
+#define MIN_NICE -20
 #define MAX_NICE 20
 #define DEFAULT_RECENT_CPU 0
+
+/* Macros for userprog */
+#ifdef USERPROG
+#define DEFAULT_RET_STATUS 0
+#define ERROR_RET_STATUS -1
+#endif
 
 /* A kernel thread or user process.
 
@@ -109,6 +116,13 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct semaphore sema_process_wait; /* Sema for process_wait. */
+    struct semaphore sema_process_exit; /* Sema for process_exit. */
+    struct thread *parent;              /* The parent of the thread */
+    struct list children_processes;     /* A list of children processes */
+    struct list_elem child_process;     /* Elem for children list */
+    bool has_exited;                    /* has process exited */
+    int return_status;                  /* Return status. */
 #endif
 
     int64_t wake_up_tick;               /* To monitor of sleep_time */
@@ -139,6 +153,7 @@ void thread_unblock (struct thread *);
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
+struct thread *get_thread_from_tid (tid_t);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);

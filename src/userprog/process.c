@@ -29,7 +29,11 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn_copy;
+  char *fn_copy_2;
+  char *name;
+  char *save_file;
   tid_t tid;
+  struct thread *t;
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
@@ -38,11 +42,31 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  fn_copy_2 = palloc_get_page (0);
+  if (fn_copy_2 == NULL)
+    return TID_ERROR;
+  strlcpy (fn_copy_2, file_name, PGSIZE);
+  
+  name = strtok_r (fn_copy_2, " ", &save_file);
+  
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    {
+      palloc_free_page (fn_copy); 
+      return tid;
+    }
+
+   t = get_thread_from_tid (tid);
+  sema_down (&t->sema_process_wait);
+
+  if (t->return_status == ERROR_RET_STATUS)
+    tid = TID_ERROR;
+  while (t->status == THREAD_BLOCKED)
+    thread_unblock (t);
+
   return tid;
+    
 }
 
 /* A thread function that loads a user process and starts it
@@ -53,18 +77,95 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
+  char *save_file;
+  char *name_token;
+  int i, j;
+  int argc = 0;
+  char* argv[100]; 
+  void* stack_ptr;
+  struct thread *current;
+
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  
+  /* Extract name of file. */
+  name_token = strtok_r (file_name, " ", &save_file);
+ 
+  success = load (name_token, &if_.eip, &if_.esp);
+
+  stack_ptr = if_.esp;
+
+  /* Parse string and push each token on the stack. */
+  do
+  {
+    argv[argc] = name_token;
+    argc++;
+    name_token = strtok_r (NULL, " ", &save_file);
+  } while (name_token != NULL);
+
+  for (j = argc - 1; j >= 0; --j) 
+    {
+      size_t length = strlen (argv[j]) + 1;
+      stack_ptr = (void*) (((char*) stack_ptr) - length);
+      strlcpy ((char*)stack_ptr, argv[j], length);
+      argv[j] = (char*) stack_ptr;
+    }
+
+  /* Round down stack_ptr to multiple of 4. */
+  stack_ptr = (void*) (((intptr_t) stack_ptr) & MULT_OF_FOUR_MASK);
+
+  /* Push null sentinel on stack. */
+  stack_ptr = (((char**) stack_ptr) - 1);
+  *((char*)(stack_ptr)) = 0;
+  
+  /* Push pointers to args on stack. */    
+  for (i = argc - 1; i >= 0; --i)
+    {
+      stack_ptr = (((char**) stack_ptr) - 1);
+      *((char**) stack_ptr) = argv[i];
+    } 
+
+  /* Push argv on stack. */
+  char** first_arg = (char**) stack_ptr;
+  stack_ptr = (((char**) stack_ptr) - 1);
+  *((char***) stack_ptr) = first_arg;
+
+  /* Push argc on stack. */
+  int* stk_ptr = (int*) stack_ptr;
+  --stk_ptr;
+  *stk_ptr = argc;
+  stack_ptr = (void*) stk_ptr;
+
+  /* Push null sentinel onto stack */
+  stack_ptr = (((void**) stack_ptr) - 1);
+  *((void**)(stack_ptr)) = 0;
+
+  if_.esp = stack_ptr;
+
+  current = thread_current ();
+  if (success)
+    {
+       sema_up (&current->sema_process_wait);
+       intr_disable ();
+       thread_block ();
+       intr_enable (); 
+    }
+  else
+    {
+       current->return_status = ERROR_RET_STATUS;
+       sema_up (&current->sema_process_wait);
+       intr_disable ();
+       thread_block ();
+       intr_enable ();
+       thread_exit ();
+    }
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -86,9 +187,32 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) 
+process_wait (tid_t child_tid) 
 {
-  return -1;
+   struct thread *t;
+   struct thread *current;
+
+   current = thread_current ();
+   t = get_thread_from_tid (child_tid);
+
+   if (t == NULL || t->has_exited == true || t->parent != current)
+    {
+       return ERROR_RET_STATUS;
+    }   
+   else if (t->return_status != DEFAULT_RET_STATUS)
+    {
+
+       return t->return_status;
+    }
+
+   sema_down (&t->sema_process_wait);
+    
+   int return_value = t->return_status;
+   printf ("%s: exit(%d)\n", t->name, t->return_status);
+
+   sema_up (&t->sema_process_exit);
+
+   return return_value;
 }
 
 /* Free the current process's resources. */
@@ -97,6 +221,16 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  while (!list_empty (&cur->sema_process_wait.waiters))
+         sema_up (&cur->sema_process_wait);
+  
+  cur->has_exited = true;
+  if (cur->parent != NULL)
+    {
+      sema_down (&cur->sema_process_exit); 
+    }
+
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -437,6 +571,9 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
+        /* Temporary change to PHYS_BASE - 12.
+           Will work for test programs that does not examine 
+           arguments */
         *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
