@@ -16,7 +16,7 @@
 #include <inttypes.h>
 
 /* Process identifier */
-typedef int pid_t;                        
+typedef int pid_t;
 
 static void syscall_handler (struct intr_frame *);
 static int get_user (const uint8_t *uaddr);
@@ -41,7 +41,7 @@ typedef int (*handler) (uint32_t, uint32_t, uint32_t);
 static handler syscall_map[32];
 
 void
-syscall_init (void) 
+syscall_init (void)
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
   //uncomment after implementing whole syscall handler
@@ -63,20 +63,20 @@ syscall_init (void)
 }
 
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f UNUSED)
 {
   handler function;
   int *parameter = f->esp, ret;
 
-  if ( is_user_vaddr(parameter) == -1) 
+  if ( is_user_vaddr(parameter) == -1)
     {
       exit(ERROR_RET_STATUS);
     }
 
-  if (!( is_user_vaddr (parameter + 1) && is_user_vaddr (parameter + 2) 
+  if (!( is_user_vaddr (parameter + 1) && is_user_vaddr (parameter + 2)
       && is_user_vaddr (parameter + 3)))
     {
-      exit(ERROR_RET_STATUS); 
+      exit(ERROR_RET_STATUS);
     }
 
   if (*parameter < SYS_HALT || *parameter > SYS_INUMBER)
@@ -86,10 +86,10 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   function = syscall_map[*parameter];
 
-  ret = function (*(parameter + 1), *(parameter + 2), *(parameter + 3));    
+  ret = function (*(parameter + 1), *(parameter + 2), *(parameter + 3));
   f->eax = ret;
 
-  return; 
+  return;
 }
 
 /* Reads a byte at user virtual address UADDR.
@@ -129,7 +129,7 @@ static void
 exit (int status)
 {
   struct thread *t;
-  
+
   t = thread_current ();
   // Implement close files
 
@@ -150,7 +150,7 @@ static int
 write (int fd, const void *buffer, unsigned length)
 {
   struct file *f;
-  
+
   lock_acquire (&file_lock);
   if (fd == STDOUT_FILENO)
     {
@@ -162,7 +162,7 @@ write (int fd, const void *buffer, unsigned length)
     {
       lock_release (&file_lock);
       exit (-1);
-    } 
+    }
   else
     {
       //Implement writing to file
@@ -171,5 +171,3 @@ write (int fd, const void *buffer, unsigned length)
   lock_release (&file_lock);
   return ERROR_RET_STATUS;
 }
-
-
