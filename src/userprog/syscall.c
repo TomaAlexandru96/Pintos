@@ -35,6 +35,7 @@ static int write (int fd, const void *buffer, unsigned size);
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
+static bool is_pointer_valid(uint32_t *pagedir, int *param);
 
 static struct lock file_lock;
 typedef int (*handler) (uint32_t, uint32_t, uint32_t);
@@ -62,16 +63,25 @@ syscall_init (void)
   lock_init (&file_lock);
 }
 
+static bool 
+is_pointer_valid(uint32_t pagedir, int *param) 
+{
+  return (is_user_vaddr(param) == -1) 
+          && (pagedir_get_page(pagedir, param) == NULL);
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
   handler function;
   int *parameter = f->esp, ret;
 
-  if ( is_user_vaddr(parameter) == -1)
-    {
-      exit(ERROR_RET_STATUS);
-    }
+  if (!is_pointer_valid(&current_thread()->pagedir, parameter))
+  {
+    exit(ERROR_RET_STATUS);
+  }
+
+  *parameter;
 
   if (!( is_user_vaddr (parameter + 1) && is_user_vaddr (parameter + 2)
       && is_user_vaddr (parameter + 3)))
@@ -174,29 +184,4 @@ write (int fd, const void *buffer, unsigned length)
 
   lock_release (&file_lock);
   return ERROR_RET_STATUS;
-}
-
-/* Reads a byte at user virtual address UADDR.
-UADDR must be below PHYS_BASE.
-Returns the byte value if successful, -1 if a segfault
-occurred. */
-static int
-get_user (const uint8_t *uaddr)
-{
-  int result;
-  asm ("movl $1f, %0; movzbl %1, %0; 1:"
-  : "=&a" (result) : "m" (*uaddr));
-  return result;
-}
-
-/* Writes BYTE to user address UDST.
-UDST must be below PHYS_BASE.
-Returns true if successful, false if a segfault occurred. */
-static bool
-put_user (uint8_t *udst, uint8_t byte)
-{
-  int error_code;
-  asm ("movl $1f, %0; movb %b2, %1; 1:"
-  : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-  return error_code != -1;
 }
