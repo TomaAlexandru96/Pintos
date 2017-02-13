@@ -35,7 +35,7 @@ static int write (int fd, const void *buffer, unsigned size);
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
-static bool is_pointer_valid(uint32_t *pagedir, int *param);
+static bool is_pointer_valid(uint32_t *pagedir, int param);
 
 static struct lock file_lock;
 typedef int (*handler) (uint32_t, uint32_t, uint32_t);
@@ -64,7 +64,7 @@ syscall_init (void)
 }
 
 static bool 
-is_pointer_valid(uint32_t pagedir, int *param) 
+is_pointer_valid(uint32_t *pagedir, int param) 
 {
   return (is_user_vaddr(param) == -1) 
           && (pagedir_get_page(pagedir, param) == NULL);
@@ -76,9 +76,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   handler function;
   int *parameter = f->esp, ret;
 
-  if (!is_pointer_valid(&current_thread()->pagedir, parameter))
+  if (!is_pointer_valid(thread_current()->pagedir, *parameter))
   {
-    pafedir_destroy(&current_thread()->pagedir);
+    pagedir_destroy(thread_current()->pagedir);
     kill(f);
     exit(ERROR_RET_STATUS);
   }
