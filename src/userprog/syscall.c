@@ -47,6 +47,8 @@ syscall_init (void)
   syscall_args[SYS_HALT] = 0;
   syscall_args[SYS_EXIT] = 1;
   syscall_args[SYS_WAIT] = 1;
+  syscall_args[SYS_TELL] = 1;
+  syscall_args[SYS_CREATE] = 2;
   syscall_args[SYS_WRITE] = 3;
 
   lock_init (&file_lock);
@@ -58,7 +60,6 @@ is_pointer_valid (uint32_t *param)
   if (!is_user_vaddr (param) || (pagedir_get_page (thread_current ()->pagedir,
                                                   param) == NULL))
     {
-      // pagedir_destroy (thread_current ()->pagedir);
       syscall_exit (-1);
     }
 }
@@ -72,12 +73,15 @@ syscall_handler (struct intr_frame *f UNUSED)
   is_pointer_valid (base + syscall_args[*base]);
   switch (*base)
     {
-      case SYS_HALT : syscall_halt (); break;
-      case SYS_EXIT : syscall_exit ((int) base[1]); break;
-      case SYS_WAIT : ret = (uint32_t) syscall_wait ((pid_t) base[1]); break;
-      case SYS_WRITE : ret = (uint32_t) syscall_write ((int) base[1],
+      case SYS_HALT: syscall_halt (); break;
+      case SYS_EXIT: syscall_exit ((int) base[1]); break;
+      case SYS_WAIT: ret = (uint32_t) syscall_wait ((pid_t) base[1]); break;
+      case SYS_WRITE: ret = (uint32_t) syscall_write ((int) base[1],
                                       (const void *) base[2],
                                       (unsigned) base[3]); break;
+      case SYS_CREATE: ret = (uint32_t) syscall_create ((const char *) base[1],
+                                          (unsigned) base[2]); break;
+      case SYS_TELL: ret = (uint32_t) syscall_tell ((int) base[1]);
     }
 
     f->eax = ret;
@@ -111,27 +115,33 @@ syscall_wait (pid_t pid)
   return process_wait (pid);
 }
 
+static unsigned
+syscall_tell (int fd)
+{
+  return 0;  
+}
+
+static bool
+syscall_create (const char *file, unsigned initial_size)
+{
+  is_pointer_valid ((uint32_t *) file);
+
+  lock_acquire (&file_lock);
+  bool ret = filesys_create (file, initial_size);
+  lock_release (&file_lock);
+  return ret;
+}
+
 /* Writing to file. */
 static int
 syscall_write (int fd, const void *buffer, unsigned length)
 {
-  struct file *f;
+  is_pointer_valid ((uint32_t *) buffer);
 
   lock_acquire (&file_lock);
   if (fd == STDOUT_FILENO)
     {
       putbuf (buffer, length);
-    }
-  else if (fd == STDIN_FILENO)
-      ;
-  else if ( !is_user_vaddr (buffer) || !is_user_vaddr (buffer + length) )
-    {
-      lock_release (&file_lock);
-      syscall_exit (-1);
-    }
-  else
-    {
-      //Implement writing to file
     }
 
   lock_release (&file_lock);
