@@ -48,6 +48,7 @@ syscall_init (void)
   syscall_args[SYS_EXIT] = 1;
   syscall_args[SYS_WAIT] = 1;
   syscall_args[SYS_WRITE] = 3;
+  syscall_args[SYS_FILESIZE] = 1;
 
   lock_init (&file_lock);
 }
@@ -78,6 +79,8 @@ syscall_handler (struct intr_frame *f UNUSED)
       case SYS_WRITE : ret = (uint32_t) syscall_write ((int) base[1],
                                       (const void *) base[2],
                                       (unsigned) base[3]); break;
+      case SYS_FILESIZE : ret = (uint32_t) syscall_filesize((int) base[1]);
+                                break;
     }
 
     f->eax = ret;
@@ -137,3 +140,30 @@ syscall_write (int fd, const void *buffer, unsigned length)
   lock_release (&file_lock);
   return ERROR_RET_STATUS;
 }
+
+/* */
+static int
+syscall_filesize (int fd)
+{
+  int file_size;
+  lock_acquire (&file_lock);
+  //int file_size = (int) file_length (thread_current ()->fd_map [fd]);
+  lock_release (&file_lock);
+  return file_size;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
