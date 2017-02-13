@@ -78,6 +78,8 @@ syscall_handler (struct intr_frame *f UNUSED)
 
   if (!is_pointer_valid(&current_thread()->pagedir, parameter))
   {
+    pafedir_destroy(&current_thread()->pagedir);
+    kill(f);
     exit(ERROR_RET_STATUS);
   }
 
