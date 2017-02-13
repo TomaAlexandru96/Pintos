@@ -15,6 +15,7 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/pagedir.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -395,6 +396,10 @@ thread_exit (void)
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
+  if (thread_current ()->pagedir != NULL)
+    {
+      pagedir_destroy(thread_current ()->pagedir);
+    }
   schedule ();
   NOT_REACHED ();
 }
