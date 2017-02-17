@@ -121,7 +121,9 @@ struct thread
     struct thread *parent;              /* The parent of the thread */
     struct list children_processes;     /* A list of children processes */
     struct list_elem child_process;     /* Elem for children list */
-    bool has_exited;                    /* has process exited */
+    struct list open_files;             /* A mapping from fd to a file */
+    int last_fd;                        /* Used to describe next avaliable fd*/
+    bool has_exited;                    /* Has process exited */
     int return_status;                  /* Return status. */
 #endif
 
@@ -131,6 +133,15 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+  };
+
+
+/* Used by the process mapping of open files */
+struct file_map 
+  {
+    int fd;
+    struct file *f;
+    struct list_elem elem; 
   };
 
 /* If false (default), use round-robin scheduler.

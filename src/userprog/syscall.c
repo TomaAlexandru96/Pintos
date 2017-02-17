@@ -36,6 +36,7 @@ static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
 static void is_pointer_valid(uint32_t *param);
 
+
 static struct lock file_lock;
 static int syscall_args[32];
 
@@ -51,6 +52,7 @@ syscall_init (void)
   syscall_args[SYS_CREATE] = 2;
   syscall_args[SYS_WRITE] = 3;
   syscall_args[SYS_FILESIZE] = 1;
+  syscall_args[SYS_OPEN] = 1;
 
   lock_init (&file_lock);
 }
@@ -162,7 +164,32 @@ syscall_filesize (int fd)
   return file_size;
 }
 
-
+/*  */
+static int 
+syscall_open (const char *file)
+{
+  int fd = thread_current ()->last_fd;
+  lock_acquire (&file_lock);
+  struct file *f = filesys_open (file);
+  lock_release (&file_lock);
+  if (f == NULL)
+    {
+      return -1;
+    }
+  lock_acquire (&file_lock);
+  struct file *open_file = file_open (file_get_inode (f));
+  lock_release (&file_lock);
+  if (open_file == NULL)
+    {
+      return -1;
+    }
+  struct file_map fm;
+  fm.fd = fd;
+  fm.f = open_file;
+  list_push_back (&thread_current ()->open_files, &fm.elem);
+  thread_current ()->last_fd++;
+  return fd;
+}
 
 
 

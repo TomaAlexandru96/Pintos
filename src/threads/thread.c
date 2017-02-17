@@ -251,7 +251,9 @@ thread_create (const char *name, int priority,
   sema_init (&t->sema_process_exit, 0);
   t->return_status = DEFAULT_RET_STATUS;
 
+  t->last_fd = 2;
   list_init (&t->children_processes);
+  list_init (&t->open_files);
   t->has_exited = false;
   t->parent = thread_current ();
 
