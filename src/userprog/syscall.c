@@ -12,6 +12,7 @@
 #include "filesys/filesys.h"
 #include "threads/malloc.h"
 #include "filesys/file.h"
+#include "threads/malloc.h"
 #include <stdio.h>
 #include <list.h>
 #include <inttypes.h>
@@ -40,7 +41,7 @@ static bool remove_fd (int fd);
 static struct file_map *get_filemap (int fd);
 static void is_pointer_valid (uint32_t *param, struct intr_frame *);
 static void syscall_exit_aux (struct intr_frame *f, int status);
-static void syscall_close_aux (int fd);
+static void syscall_close_aux (struct intr_frame *f, struct file_map *fm);
 
 typedef void (*sys_func) (struct intr_frame *);
 
@@ -83,6 +84,7 @@ static struct file_map *
 get_filemap (int fd)
 {
   struct list_elem *e;
+
   for (e = list_begin (&thread_current ()->open_files);
        e != list_end (&thread_current ()->open_files);
        e = list_next (e))
@@ -135,16 +137,6 @@ syscall_exit (struct intr_frame *f UNUSED)
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int status = (int) GET_ARGUMENT (f, 1);
 
-  // close all files
-  struct list_elem *e;
-  for (e = list_begin (&thread_current ()->open_files);
-       e != list_end (&thread_current ()->open_files);
-       e = list_next (e))
-    {
-      struct file_map *file_m = list_entry (e, struct file_map, elem);
-      syscall_close_aux (file_m->fd);
-    }
-
   syscall_exit_aux (f, status);
 }
 
@@ -152,6 +144,17 @@ static void
 syscall_exit_aux (struct intr_frame *f, int status)
 {
   struct thread *t = thread_current ();
+
+  // close all files
+  struct list_elem *e = list_begin (&thread_current ()->open_files);
+
+  while (e != list_end (&thread_current ()->open_files))
+    {
+      struct file_map *file_m = list_entry (e, struct file_map, elem);
+      syscall_close_aux (f, file_m);
+      e = list_next (e);
+      free (file_m);
+    }
 
   t->return_status = status;
   f->eax = status;
@@ -252,6 +255,8 @@ syscall_open (struct intr_frame *frame UNUSED)
   ARGUMENTS_IN_USER_SPACE (frame, 1);
   const char *file = (const char *) GET_ARGUMENT (frame, 1);
 
+  is_pointer_valid ((uint32_t *) file, frame);
+
   int fd = thread_current ()->last_fd;
   lock_acquire (&file_lock);
   struct file *f = filesys_open (file);
@@ -261,18 +266,10 @@ syscall_open (struct intr_frame *frame UNUSED)
       frame->eax = -1;
       return;
     }
-  lock_acquire (&file_lock);
-  struct file *open_file = file_open (file_get_inode (f));
-  lock_release (&file_lock);
-  if (open_file == NULL)
-    {
-      frame->eax = -1;
-      return;
-    }
-  struct file_map fm;
-  fm.fd = fd;
-  fm.f = open_file;
-  list_push_back (&thread_current ()->open_files, &fm.elem);
+  struct file_map *fm = (struct file_map *) malloc (sizeof (struct file_map));
+  fm->fd = fd;
+  fm->f = f;
+  list_push_back (&thread_current ()->open_files, &fm->elem);
   thread_current ()->last_fd++;
   frame->eax = fd;
 }
@@ -360,26 +357,28 @@ syscall_close (struct intr_frame *f UNUSED)
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int fd = (int) GET_ARGUMENT (f, 1);
 
-  syscall_close_aux (fd);
+  struct file_map *fm = get_filemap (fd);
+  syscall_close_aux (f, fm);
+  free (fm);
 }
 
 static void
-syscall_close_aux (int fd)
+syscall_close_aux (struct intr_frame *f UNUSED, struct file_map *fm)
 {
-  struct file_map *m = get_filemap (fd);
-
-  if (m == NULL)
+  if (fm == NULL)
     {
       // ERROR
       return;
     }
 
-  struct file *file = m->f;
+  struct file *file = fm->f;
   lock_acquire (&file_lock);
   file_close (file);
   lock_release (&file_lock);
 
-  if (!remove_fd (fd))
+  bool has_been_removed = !remove_fd (fm->fd);
+
+  if (!has_been_removed)
     {
       // ERROR
     }
