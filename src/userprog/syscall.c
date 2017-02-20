@@ -20,8 +20,11 @@
 typedef int pid_t;
 
 static void syscall_handler (struct intr_frame *);
+<<<<<<< HEAD
 
 /* All the system calls avaliable in Pintos */
+=======
+>>>>>>> e94d8fb612c850912604d09c5582e66bd7a64639
 static void syscall_halt (void);
 static void syscall_exit (int status);
 static pid_t syscall_exec (const char *file);
@@ -80,7 +83,9 @@ syscall_handler (struct intr_frame *f UNUSED)
   switch (*base)
     {
       case SYS_HALT: syscall_halt (); break;
-      case SYS_EXIT: syscall_exit ((int) base[1]); break;
+      case SYS_EXIT:
+          f->eax = (int) base[1];
+          syscall_exit ((int) base[1]); break;
       case SYS_WAIT: ret = (uint32_t) syscall_wait ((pid_t) base[1]); break;
       case SYS_WRITE: ret = (uint32_t) syscall_write ((int) base[1],
                                       (const void *) base[2],
@@ -121,6 +126,10 @@ syscall_exit (int status)
     }
 
   t->return_status = status;
+<<<<<<< HEAD
+=======
+  printf ("%s: exit(%d)\n", t->name, t->return_status);
+>>>>>>> e94d8fb612c850912604d09c5582e66bd7a64639
   thread_exit ();
 
   printf("%s: exit(%d)\n", t->name, t->return_status);
