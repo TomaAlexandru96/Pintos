@@ -208,7 +208,6 @@ process_wait (tid_t child_tid)
    sema_down (&t->sema_process_wait);
 
    int return_value = t->return_status;
-   printf ("%s: exit(%d)\n", t->name, t->return_status);
 
    sema_up (&t->sema_process_exit);
 
