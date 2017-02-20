@@ -217,14 +217,33 @@ syscall_write (struct intr_frame *f UNUSED)
   unsigned length = (unsigned) GET_ARGUMENT (f, 3);
   is_pointer_valid ((uint32_t *) buffer, f);
 
+  uint32_t size_written = 0;
+
   lock_acquire (&file_lock);
   if (fd == STDOUT_FILENO)
     {
+      size_written = length;
       putbuf (buffer, length);
     }
+  else if (fd == STDIN_FILENO)
+    {
+      syscall_exit_aux (f, -1);
+      return;
+    }
+  else
+    {
+      struct file_map *m = get_filemap (fd);
 
+      if (m == NULL)
+        {
+          syscall_exit_aux (f, -1);
+          return;
+        }
+      size_written = (uint32_t) file_write (m->f, buffer, length);
+    }
   lock_release (&file_lock);
-  f->eax = ERROR_RET_STATUS;
+
+  f->eax = size_written;
 }
 
 /* */
