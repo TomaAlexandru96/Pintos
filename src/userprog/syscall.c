@@ -36,8 +36,11 @@ static void syscall_seek (struct intr_frame *);
 static void syscall_tell (struct intr_frame *);
 static void syscall_close (struct intr_frame *);
 
+static bool remove_fd (int fd);
+static struct file_map *get_filemap (int fd);
 static void is_pointer_valid (uint32_t *param, struct intr_frame *);
 static void syscall_exit_aux (struct intr_frame *f, int status);
+static void syscall_close_aux (int fd);
 
 typedef void (*sys_func) (struct intr_frame *);
 
@@ -76,6 +79,41 @@ is_pointer_valid (uint32_t *param, struct intr_frame *f UNUSED)
     }
 }
 
+static struct file_map *
+get_filemap (int fd)
+{
+  struct list_elem *e;
+  for (e = list_begin (&thread_current ()->open_files);
+       e != list_end (&thread_current ()->open_files);
+       e = list_next (e))
+    {
+      struct file_map *file_m = list_entry (e, struct file_map, elem);
+      if (file_m->fd == fd)
+        return file_m;
+    }
+
+  return NULL;
+}
+
+static bool
+remove_fd (int fd)
+{
+  if (fd >= thread_current ()->last_fd) {
+    return false;
+  }
+
+  struct file_map *m = get_filemap (fd);
+
+  if (m == NULL)
+    {
+      return false;
+    }
+
+  list_remove (&m->elem);
+
+  return true;
+}
+
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
@@ -96,6 +134,16 @@ syscall_exit (struct intr_frame *f UNUSED)
 {
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int status = (int) GET_ARGUMENT (f, 1);
+
+  // close all files
+  struct list_elem *e;
+  for (e = list_begin (&thread_current ()->open_files);
+       e != list_end (&thread_current ()->open_files);
+       e = list_next (e))
+    {
+      struct file_map *file_m = list_entry (e, struct file_map, elem);
+      syscall_close_aux (file_m->fd);
+    }
 
   syscall_exit_aux (f, status);
 }
@@ -124,7 +172,22 @@ syscall_wait (struct intr_frame *f UNUSED)
 static void
 syscall_tell (struct intr_frame *f UNUSED)
 {
+  ARGUMENTS_IN_USER_SPACE (f, 1);
+  int fd = GET_ARGUMENT (f, 1);
 
+  struct file_map *m = get_filemap (fd);
+
+  if (m == NULL)
+    {
+      // ERROR
+      return;
+    }
+
+  lock_acquire (&file_lock);
+  off_t offset = file_tell (m->f);
+  lock_release (&file_lock);
+
+  f->eax = (uint32_t) offset;
 }
 
 static void
@@ -167,10 +230,19 @@ syscall_filesize (struct intr_frame *f UNUSED)
 {
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int fd = (int) GET_ARGUMENT (f, 1);
+
+  struct file_map *m = get_filemap (fd);
+
+  if (m == NULL)
+    {
+      // ERROR
+      return;
+    }
+
   lock_acquire (&file_lock);
-  //int file_size = (int) file_length (thread_current ()->fd_map [fd]);
+  int file_size = (int) file_length (m->f);
   lock_release (&file_lock);
-  // f->eax = file_size;
+  f->eax = file_size;
 }
 
 /*  */
@@ -206,31 +278,109 @@ syscall_open (struct intr_frame *frame UNUSED)
 }
 
 static void
-syscall_exec (struct intr_frame *f)
+syscall_exec (struct intr_frame *f UNUSED)
 {
+  ARGUMENTS_IN_USER_SPACE (f, 1);
+  const char *cmd = (const char *) GET_ARGUMENT (f, 1);
 
+  tid_t tid = process_execute (cmd);
+
+  if (tid == TID_ERROR)
+    {
+      f->eax = -1;
+    }
+  else
+    {
+      f->eax = tid;
+    }
 }
 
 static void
-syscall_remove (struct intr_frame *f)
+syscall_remove (struct intr_frame *f UNUSED)
 {
+  ARGUMENTS_IN_USER_SPACE (f, 1);
+  const char *file = (const char *) GET_ARGUMENT (f, 1);
 
+  lock_acquire (&file_lock);
+  bool ret = filesys_remove (file);
+  lock_release (&file_lock);
+
+  f->eax = (uint32_t) ret;
 }
 
 static void
-syscall_read (struct intr_frame *f)
+syscall_read (struct intr_frame *f UNUSED)
 {
+  ARGUMENTS_IN_USER_SPACE (f, 3);
+  int fd = (int) GET_ARGUMENT (f, 1);
+  void *buffer = (void *) GET_ARGUMENT (f, 2);
+  unsigned size = (unsigned) GET_ARGUMENT (f, 3);
+  is_pointer_valid ((uint32_t *) buffer, f);
 
+  struct file_map *m = get_filemap (fd);
+
+  if (m == NULL)
+    {
+      // ERROR
+      return;
+    }
+
+  struct file *file = m->f;
+  lock_acquire (&file_lock);
+  off_t offset = file_read (file, buffer, size);
+  lock_release (&file_lock);
+  f->eax = (uint32_t) offset;
 }
 
 static void
-syscall_seek (struct intr_frame *f)
+syscall_seek (struct intr_frame *f UNUSED)
 {
+  ARGUMENTS_IN_USER_SPACE (f, 2);
+  int fd = (int) GET_ARGUMENT (f, 1);
+  unsigned position = (unsigned) GET_ARGUMENT (f, 2);
 
+  struct file_map *m = get_filemap (fd);
+
+  if (m == NULL)
+    {
+      // ERROR
+      return;
+    }
+
+  struct file *file = m->f;
+
+  lock_acquire (&file_lock);
+  file_seek (file, (off_t) position);
+  lock_release (&file_lock);
 }
 
 static void
-syscall_close (struct intr_frame *f)
+syscall_close (struct intr_frame *f UNUSED)
 {
+  ARGUMENTS_IN_USER_SPACE (f, 1);
+  int fd = (int) GET_ARGUMENT (f, 1);
 
+  syscall_close_aux (fd);
+}
+
+static void
+syscall_close_aux (int fd)
+{
+  struct file_map *m = get_filemap (fd);
+
+  if (m == NULL)
+    {
+      // ERROR
+      return;
+    }
+
+  struct file *file = m->f;
+  lock_acquire (&file_lock);
+  file_close (file);
+  lock_release (&file_lock);
+
+  if (!remove_fd (fd))
+    {
+      // ERROR
+    }
 }
