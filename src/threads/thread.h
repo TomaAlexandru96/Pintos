@@ -121,15 +121,17 @@ struct thread
     struct thread *parent;              /* The parent of the thread */
     struct list children_processes;     /* A list of children processes */
     struct list_elem child_process;     /* Elem for children list */
-    struct list open_files;             /* A mapping from fd to a file */
-    int last_fd;                        /* Used to describe next avaliable fd*/
+    struct list p_open_files;           /* Holds all opened files
+                                           of the process */
+    int last_fd;                        /* Used to describe next avaliable fd */
     bool has_exited;                    /* Has process exited */
-    int return_status;                  /* Return status. */
+    int return_status;                  /* Return status of the thread.
+                                           (-1 if it failed to exit) */
 #endif
 
     int64_t wake_up_tick;               /* To monitor of sleep_time */
     struct list_elem sleeping_thread;   /* Add to sleeping_thread_list when
-                                           calling timer_sleep*/
+                                           calling timer_sleep */
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
@@ -137,11 +139,11 @@ struct thread
 
 
 /* Used by the process mapping of open files */
-struct file_map 
+struct file_map
   {
     int fd;
     struct file *f;
-    struct list_elem elem; 
+    struct list_elem elem;
   };
 
 /* If false (default), use round-robin scheduler.

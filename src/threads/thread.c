@@ -252,8 +252,8 @@ thread_create (const char *name, int priority,
   t->return_status = DEFAULT_RET_STATUS;
 
   t->last_fd = 2;
+  list_init(&t->p_open_files);
   list_init (&t->children_processes);
-  list_init (&t->open_files);
   t->has_exited = false;
   t->parent = thread_current ();
 

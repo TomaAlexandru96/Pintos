@@ -21,6 +21,7 @@ typedef int pid_t;
 
 static void syscall_handler (struct intr_frame *);
 
+/* All the system calls avaliable in Pintos */
 static void syscall_halt (void);
 static void syscall_exit (int status);
 static pid_t syscall_exec (const char *file);
@@ -36,6 +37,8 @@ static unsigned syscall_tell (int fd);
 static void syscall_close (int fd);
 static void is_pointer_valid(uint32_t *param);
 
+/* Auxiliary functions */
+static struct file_map *find_fd_file_map (int fd);
 
 static struct lock file_lock;
 static int syscall_args[32];
@@ -99,18 +102,29 @@ syscall_halt (void)
   shutdown_power_off ();
 }
 
-/* Terminate the user process. */
-static void
+/* Terminate the user process.
+   Returns -1 if the exit fails. */
+static int
 syscall_exit (int status)
 {
   struct thread *t;
+  struct list_elem *l;
+  int fd;
 
   t = thread_current ();
-  // Implement close files
+  // Close all opened files of the current process
+  while (!list_empty (&t->p_open_files))
+    {
+      l = list_begin (&t->p_open_files);
+      fd = list_entry (l, struct file_map, elem)->fd;
+      syscall_close (fd);
+    }
 
   t->return_status = status;
-
   thread_exit ();
+
+  printf("%s: exit(%d)\n", t->name, t->return_status);
+  return -1;
 }
 
 /* Wait for child process to finish. */
@@ -123,16 +137,24 @@ syscall_wait (pid_t pid)
 static unsigned
 syscall_tell (int fd)
 {
-  return 0;  
+  return 0;
 }
 
+/* Creates a new file initially initial_size bytes in size.
+   Returns true if successful, false otherwise. */
 static bool
 syscall_create (const char *file, unsigned initial_size)
 {
   is_pointer_valid ((uint32_t *) file);
 
   lock_acquire (&file_lock);
+
+  if (!file)
+    {
+      return sys_exit (-1); // error, file == NULL
+    }
   bool ret = filesys_create (file, initial_size);
+
   lock_release (&file_lock);
   return ret;
 }
@@ -164,43 +186,83 @@ syscall_filesize (int fd)
   return file_size;
 }
 
-/*  */
-static int 
+/* Opens the file called file.
+   Returns a positive integer handle called fd ("file descriptor")
+   If the file could not be opened, return -1
+   There is no need to introduce a lock when opening a file, because you are
+   not writing to it at that step. */
+static int
 syscall_open (const char *file)
 {
-  int fd = thread_current ()->last_fd;
-  lock_acquire (&file_lock);
-  struct file *f = filesys_open (file);
-  lock_release (&file_lock);
-  if (f == NULL)
+  int fd = thread_current ()->last_fd; // file descriptor
+
+  if (!file) /* Error, file == NULL */
     {
       return -1;
     }
-  lock_acquire (&file_lock);
-  struct file *open_file = file_open (file_get_inode (f));
-  lock_release (&file_lock);
-  if (open_file == NULL)
+  if(!is_user_vaddr (file)) // Invalid address for file
     {
-      return -1;
+      syscall_exit (-1);
+    }
+  /* Fails if no file named NAME exists, or if an internal
+     memory allocation fails. */
+  struct file *f = filesys_open (file);
+  if (!f)
+    {
+      return -1; // Error, incorrect file name
+    }
+
+  struct file *open_file = file_open (file_get_inode (f));
+
+  if (!open_file)
+    {
+      return -1; // Error, incorrect file name
     }
   struct file_map fm;
   fm.fd = fd;
   fm.f = open_file;
   list_push_back (&thread_current ()->open_files, &fm.elem);
   thread_current ()->last_fd++;
+
   return fd;
 }
 
+/* Closes file descriptor fd. Closes the processe's opened files descriptors. */
+static void
+syscall_close (int fd)
+{
+  struct fd_elem *f;
 
+  f = find_fd_file_map (fd);
 
+  if (!f) /* Invalid fd */
+    {
+      return 0;
+    }
+  file_close (f->file);
+  list_remove (&f->elem);
+  free (f);
+}
 
+static struct file_map*
+find_fd_file_map (int fd)
+{
+  struct file_map *map;
+  struct lis_elem *l;
+  struct thread *t;
 
+  t = thread_current ();
 
-
-
-
-
-
-
-
-
+  enum intr_level old_level = intr_disable ();
+  for (l = list_begin (&t->p_open_files); l != list_end (&t->p_open_files);
+       l = list_next (l))
+    {
+      map = list_entry (l, struct file_map, elem);
+      if (map->fd == fd)
+        {
+          return map;
+        }
+    }
+  intr_set_level (old_level);
+  return NULL;
+}
