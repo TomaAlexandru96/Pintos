@@ -221,7 +221,7 @@ syscall_open (const char *file)
   struct file_map fm;
   fm.fd = fd;
   fm.f = open_file;
-  list_push_back (&thread_current ()->open_files, &fm.elem);
+  list_push_back (&thread_current ()->p_open_files, &fm.elem);
   thread_current ()->last_fd++;
 
   return fd;
