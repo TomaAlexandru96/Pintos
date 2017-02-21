@@ -116,15 +116,8 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct semaphore sema_process_wait; /* Sema for process_wait. */
-    struct semaphore sema_process_exit; /* Sema for process_exit. */
-    struct thread *parent;              /* The parent of the thread */
-    struct list children_processes;     /* A list of children processes */
-    struct list_elem child_process;     /* Elem for children list */
     struct list open_files;             /* A mapping from fd to a file */
     int last_fd;                        /* Used to describe next avaliable fd*/
-    bool has_exited;                    /* Has process exited */
-    int return_status;                  /* Return status. */
 #endif
 
     int64_t wake_up_tick;               /* To monitor of sleep_time */
@@ -137,11 +130,11 @@ struct thread
 
 
 /* Used by the process mapping of open files */
-struct file_map 
+struct file_map
   {
     int fd;
     struct file *f;
-    struct list_elem elem; 
+    struct list_elem elem;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -186,4 +179,3 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 #endif /* threads/thread.h */
-

@@ -156,9 +156,8 @@ syscall_exit_aux (struct intr_frame *f, int status)
       free (file_m);
     }
 
-  t->return_status = status;
   f->eax = status;
-  printf ("%s: exit(%d)\n", t->name, t->return_status);
+  printf ("%s: exit(%d)\n", t->name, status);
   thread_exit ();
 }
 
@@ -169,7 +168,7 @@ syscall_wait (struct intr_frame *f UNUSED)
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int pid = (int) GET_ARGUMENT (f, 1);
 
-  f->eax = process_wait (pid);
+  f->eax = (uint32_t) process_wait (pid);
 }
 
 static void
