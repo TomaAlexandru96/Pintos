@@ -148,6 +148,9 @@ syscall_exit_aux (struct intr_frame *f, int status)
   // close all files
   struct list_elem *e = list_begin (&thread_current ()->open_files);
 
+  if (lock_held_by_current_thread (&file_lock) )
+    lock_release (&file_lock);
+
   while (e != list_end (&thread_current ()->open_files))
     {
       struct file_map *file_m = list_entry (e, struct file_map, elem);
