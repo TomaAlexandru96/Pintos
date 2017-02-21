@@ -149,6 +149,7 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
+  /* Exception handling */
   if (not_present || user)
     syscall_exit_t (f, ERROR_RET_STATUS);
 
