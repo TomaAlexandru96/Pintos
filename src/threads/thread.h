@@ -119,24 +119,30 @@ struct thread
     struct list open_files;             /* A mapping from fd to a file */
     int last_fd;                        /* Used to describe next avaliable fd */
 
-    struct list children;               /* Keeps a reference to all children */
+    struct list executing_children;     /* Keeps a reference to all executing_children */
+    struct list finished_children;      /* Keeps a reference to all finished_children */
     struct thread *parent;              /* Reference to parent process */
     struct semaphore sema_wait;         /* Semaphore used by process_wait */
-    struct list_elem children_elem;     /* Used by children list */
+    struct list_elem exec_children_elem;     /* Used by children list */
+    bool has_waited;                    /* Parent process called wait */
     int return_status;                  /* The process exit status */
-    bool has_executed;                  /* If the process has already executed*/
-    bool has_waited;                    /* If the parent process has
-                                           already called wait */
 #endif
 
     int64_t wake_up_tick;               /* To monitor of sleep_time */
     struct list_elem sleeping_thread;   /* Add to sleeping_thread_list when
                                            calling timer_sleep*/
-
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };
 
+/* Used by process to idnetify executed process return status */
+struct fin_process_map
+  {
+    tid_t tid;               /* Process idnetifier */
+    int return_status;       /* The return status */
+    bool has_waited;         /* Parent process called wait */
+    struct list_elem elem;
+  };
 
 /* Used by the process mapping of open files */
 struct file_map
@@ -167,6 +173,8 @@ struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
 struct thread *get_thread_from_tid (tid_t);
+struct thread *get_exec_children (tid_t tid);
+struct fin_process_map *get_finished_children (tid_t tid);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);

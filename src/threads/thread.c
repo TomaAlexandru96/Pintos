@@ -109,7 +109,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  list_init (&initial_thread->children);
+  list_init (&initial_thread->executing_children);
+  list_init (&initial_thread->finished_children);
   sema_init (&initial_thread->sema_wait, 0);
 }
 
@@ -251,9 +252,9 @@ thread_create (const char *name, int priority,
   #ifdef USERPROG
   t->last_fd = 2;
   list_init (&t->open_files);
-  list_init (&t->children);
+  list_init (&t->executing_children);
+  list_init (&t->finished_children);
   sema_init (&t->sema_wait, 0);
-  t->has_executed = false;
   t->has_waited = false;
   t->parent = thread_current ();
   #endif
@@ -331,6 +332,42 @@ tid_t
 thread_tid (void)
 {
   return thread_current ()->tid;
+}
+
+struct thread *
+get_exec_children (tid_t child_tid)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&thread_current ()->executing_children);
+       e != list_end (&thread_current ()->executing_children);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, exec_children_elem);
+      if (t->tid == child_tid)
+        {
+          return t;
+        }
+    }
+  return NULL;
+}
+
+struct fin_process_map *
+get_finished_children (tid_t child_tid)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&thread_current ()->finished_children);
+       e != list_end (&thread_current ()->finished_children);
+       e = list_next (e))
+    {
+      struct fin_process_map *m = list_entry (e, struct fin_process_map, elem);
+      if (m->tid == child_tid)
+        {
+          return m;
+        }
+    }
+  return NULL;
 }
 
 /* Returns the thread given the tid from list of all threads */
