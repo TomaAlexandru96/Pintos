@@ -405,11 +405,3 @@ syscall_close_aux (struct intr_frame *f UNUSED, struct file_map *fm)
       // ERROR
     }
 }
-
-
-/* Function used in exception.c to test memory */
-void 
-syscall_exit_t (struct intr_frame *f, int status)
-{
-  syscall_exit_aux (f, status);
-}
