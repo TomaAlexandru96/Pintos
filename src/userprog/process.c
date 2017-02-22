@@ -28,29 +28,23 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name)
 {
-  char *fn_copy;
-  char *fn_copy_2;
-  char *name;
-  char *save_file;
-  tid_t tid;
-  struct thread *t;
-
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
+  char *fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  fn_copy_2 = palloc_get_page (0);
+  char *fn_copy_2 = palloc_get_page (0);
   if (fn_copy_2 == NULL)
     return TID_ERROR;
   strlcpy (fn_copy_2, file_name, PGSIZE);
 
-  name = strtok_r (fn_copy_2, " ", &save_file);
+  char *save_file;
+  char *name = strtok_r (fn_copy_2, " ", &save_file);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
+  tid_t tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     {
       palloc_free_page (fn_copy);
@@ -58,7 +52,8 @@ process_execute (const char *file_name)
       return tid;
     }
 
-  t = get_thread_from_tid (tid);
+  struct thread *t = get_thread_from_tid (tid);
+  list_push_back (&thread_current ()->children, &t->children_elem);
 
   return tid;
 }
@@ -77,7 +72,6 @@ start_process (void *file_name_)
   int argc = 0;
   char* argv[100];
   void* stack_ptr;
-  struct thread *current;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -167,7 +161,33 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
-  while (true) {}
+  // get the children
+  struct thread *child = NULL;
+
+  struct list_elem *e;
+
+  for (e = list_begin (&thread_current ()->children);
+       e != list_end (&thread_current ()->children);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, children_elem);
+      if (t->tid == child_tid)
+        {
+          child = t;
+          break;
+        }
+    }
+
+  if (child == NULL || child->has_waited)
+    return -1;
+
+  if (child->has_executed)
+    return child->return_status;
+
+  child->has_waited = true;
+
+  sema_down (&thread_current ()->sema_wait);
+  return child->return_status;
 }
 
 /* Free the current process's resources. */
@@ -176,6 +196,9 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  cur->has_executed = true;
+  sema_up (&cur->parent->sema_wait);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

@@ -117,7 +117,16 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
     struct list open_files;             /* A mapping from fd to a file */
-    int last_fd;                        /* Used to describe next avaliable fd*/
+    int last_fd;                        /* Used to describe next avaliable fd */
+
+    struct list children;               /* Keeps a reference to all children */
+    struct thread *parent;              /* Reference to parent process */
+    struct semaphore sema_wait;         /* Semaphore used by process_wait */
+    struct list_elem children_elem;     /* Used by children list */
+    int return_status;                  /* The process exit status */
+    bool has_executed;                  /* If the process has already executed*/
+    bool has_waited;                    /* If the parent process has
+                                           already called wait */
 #endif
 
     int64_t wake_up_tick;               /* To monitor of sleep_time */

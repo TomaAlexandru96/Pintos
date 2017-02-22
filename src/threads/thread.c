@@ -109,6 +109,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  list_init (&initial_thread->children);
+  sema_init (&initial_thread->sema_wait, 0);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -249,13 +251,12 @@ thread_create (const char *name, int priority,
   #ifdef USERPROG
   t->last_fd = 2;
   list_init (&t->open_files);
-
-  if (thread_current () != initial_thread)
-    {
-
-    }
+  list_init (&t->children);
+  sema_init (&t->sema_wait, 0);
+  t->has_executed = false;
+  t->has_waited = false;
+  t->parent = thread_current ();
   #endif
-
 
   return tid;
 }

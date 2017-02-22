@@ -157,6 +157,7 @@ syscall_exit_aux (struct intr_frame *f, int status)
     }
 
   f->eax = status;
+  t->return_status = status;
   printf ("%s: exit(%d)\n", t->name, status);
   thread_exit ();
 }
