@@ -122,10 +122,8 @@ struct thread
     struct list children_processes;     /* A list of children processes */
     struct list_elem child_process;     /* Elem for children list */
     struct list open_files;             /* A mapping from fd to a file */
-    struct file *exec_thread;           /* File containing thread executable */
     int last_fd;                        /* Used to describe next avaliable fd*/
     bool has_exited;                    /* Has process exited */
-    bool has_waited;                    /* Parent thread has called wait */
     int return_status;                  /* Return status. */
 #endif
 

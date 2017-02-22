@@ -17,7 +17,6 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
-#include "threads/malloc.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -31,6 +30,7 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   char *fn_copy_2;
+  char *name;
   char *save_file;
   tid_t tid;
   struct thread *t;
@@ -43,23 +43,18 @@ process_execute (const char *file_name)
   strlcpy (fn_copy, file_name, PGSIZE);
 
   fn_copy_2 = palloc_get_page (0);
-
   if (fn_copy_2 == NULL)
-    {
-      palloc_free_page (fn_copy);
-      return TID_ERROR;
-    }
+    return TID_ERROR;
   strlcpy (fn_copy_2, file_name, PGSIZE);
-  file_name = strtok_r (fn_copy_2, " ", &save_file);
+
+  name = strtok_r (fn_copy_2, " ", &save_file);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  
-  palloc_free_page (fn_copy_2);
-
+  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     {
       palloc_free_page (fn_copy);
+      palloc_free_page (fn_copy_2);
       return tid;
     }
 
@@ -153,17 +148,19 @@ start_process (void *file_name_)
 
   current = thread_current ();
   if (success)
-    { 
-       current->exec_thread = filesys_open (file_name);
-       file_deny_write (current->exec_thread);
+    {
        sema_up (&current->sema_process_wait);
+       intr_disable ();
+       thread_block ();
+       intr_enable ();
     }
   else
     {
-       /* If load failed, quit. */
-       palloc_free_page (file_name);
        current->return_status = ERROR_RET_STATUS;
        sema_up (&current->sema_process_wait);
+       intr_disable ();
+       thread_block ();
+       intr_enable ();
        thread_exit ();
     }
 
@@ -198,11 +195,11 @@ process_wait (tid_t child_tid)
    current = thread_current ();
    t = get_thread_from_tid (child_tid);
 
-   if (t == NULL || t->parent != current || t->has_waited)
+   if (t == NULL || t->has_exited == true || t->parent != current)
     {
        return ERROR_RET_STATUS;
     }
-   else if (t->return_status != DEFAULT_RET_STATUS || t->has_exited == true)
+   else if (t->return_status != DEFAULT_RET_STATUS)
     {
 
        return t->return_status;
@@ -214,8 +211,6 @@ process_wait (tid_t child_tid)
 
    sema_up (&t->sema_process_exit);
 
-   t->has_waited = true;
-
    return return_value;
 }
 
@@ -226,11 +221,8 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  if (cur->exec_thread != NULL)
-    file_allow_write (cur->exec_thread);
-
   while (!list_empty (&cur->sema_process_wait.waiters))
-    sema_up (&cur->sema_process_wait);
+         sema_up (&cur->sema_process_wait);
 
   cur->has_exited = true;
   if (cur->parent != NULL)

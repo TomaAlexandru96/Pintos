@@ -255,7 +255,6 @@ thread_create (const char *name, int priority,
   list_init (&t->children_processes);
   list_init (&t->open_files);
   t->has_exited = false;
-  t->has_waited = false;
   t->parent = thread_current ();
 
   if (thread_current () != initial_thread)
