@@ -17,6 +17,8 @@ FirstName LastName <email@domain.example>
 >> If you have any preliminary comments on your submission, or notes for the
 >> markers, please give them here.
 
+None.
+
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
@@ -27,15 +29,15 @@ FirstName LastName <email@domain.example>
 ---- DATA STRUCTURES ----
 
 >> A1: (2 marks)
->> Copy here the declaration of each new or changed `struct' or `struct' member, 
->> global or static variable, `typedef', or enumeration. Identify the purpose of 
+>> Copy here the declaration of each new or changed `struct' or `struct' member,
+>> global or static variable, `typedef', or enumeration. Identify the purpose of
 >> each in 25 words or less.
 
 ---- ALGORITHMS ----
 
 >> A2: (8 marks)
 >> Briefly describe how you implemented argument parsing. In particular you
->> should mention how you arrange for the elements of argv[] to be in the right 
+>> should mention how you arrange for the elements of argv[] to be in the right
 >> order and how you avoid overflowing the stack page?
 
 ---- RATIONALE ----
@@ -44,8 +46,8 @@ FirstName LastName <email@domain.example>
 >> Why does Pintos implement strtok_r() but not strtok()?
 
 >> A4: (10 marks)
->> In Pintos, the kernel separates commands into a executable name and 
->> arguments. In Unix-like systems, the shell does this separation. Identify 
+>> In Pintos, the kernel separates commands into a executable name and
+>> arguments. In Unix-like systems, the shell does this separation. Identify
 >> at least two advantages of the Unix approach.
 
                  SYSTEM CALLS
@@ -53,71 +55,125 @@ FirstName LastName <email@domain.example>
 
 ---- DATA STRUCTURES ----
 
->> B1: (10 marks) 
->> Copy here the declaration of each new or changed `struct' or `struct' member, 
->> global or static variable, `typedef', or enumeration. Identify the purpose of 
+>> B1: (10 marks)
+>> Copy here the declaration of each new or changed `struct' or `struct' member,
+>> global or static variable, `typedef', or enumeration. Identify the purpose of
 >> each in 25 words or less.
 
+struct list open_files;
+
+This is a list of file_maps. It acts as a map from a file descriptor to a
+pointer of an open file.
+
+int last_fd;
+
+it is used to keep the file descriptor of the current process and to assign a fd
+to a newly open file.
+
+struct file_map
+  {
+    int fd;
+    struct file *f;
+    struct list_elem elem;
+  };
+
+Keeps map from a file descriptor to a pointer to a file. It also has a
+list_elem, because we make a list of this struct.
+
+typedef void (*sys_func) (struct intr_frame *);
+
+
+
 >> B2: (5 marks)
->> Describe how you associate file descriptors with open files. Are your file 
+>> Describe how you associate file descriptors with open files. Are your file
 >> descriptors unique within the entire OS or just within a single process?
+
+In thread.h, in the struct thread, we implemented a structure, file_map. This
+has three members, an int fd that holds the file descriptor, a pointer to a
+struct file and a list_elem, as we make a list of struct file_map, which is
+named open_files. Each node is a pair of a file descriptor and a pointer to an
+open file. Because a user process can only have one thread, each user process will
+have its own list of open files. Each user process has an associated fd number,
+because each process is associated with a file. Initially each process' fd is
+set to 2, because 0 and 1 are reserved for stdin and stdout. We also keep a
+variable int last_fd in thread.h which holds the value of fd number in the
+current process. This comes in useful when we open a new file and need to give
+it a file descriptor based on the current process. When a new file is open its
+fd value is set to last_fd in syscall_open() and then we increment last_fd.
+This means that each file opened by a child process will have a different fd
+from all the other files opened by child processes created by the same parent
+and from the parent itself. Within the same process, all open files will have
+different fd numbers. When we create a different process, then the new process'
+fd always get initialised to 2, therefore this means that at the OS level
+we can have different open files having the same file descriptor number.
 
 ---- ALGORITHMS ----
 
 >> B3: (5 marks)
 >> Describe how your code ensures safe memory access of user provided data from
->> within the kernel. 
+>> within the kernel.
+
+
+Pintos works on a monolithic kernel. So any action done on the memory can be
+done only through system calls. Whenever a system call is done, we check that
+each argument is in the user space and also we check if if points to an
+allocated memory address. This is done by calling is_pointer_valid() on the
+pointer. If any of those conditions fails, it will call the exit() system call
+with an error code of -1. When an error occurs we close all the files open in
+the current process, then we call thread_exit() which will terminate the user
+process and will call the scheduler and run the next thread.
+
 
 >> B4: (5 marks)
->> Suppose a system call passes the kernel a pointer to a full page 
->> (4,096 bytes) of data that has to be copied from user space. What is the 
+>> Suppose a system call passes the kernel a pointer to a full page
+>> (4,096 bytes) of data that has to be copied from user space. What is the
 >> least and the greatest possible number of inspections of the page table
->> (e.g. calls to pagedir_get_page()) that might result? What about for a system 
->> call that passes a pointer to only 2 bytes of data? How might you improve 
+>> (e.g. calls to pagedir_get_page()) that might result? What about for a system
+>> call that passes a pointer to only 2 bytes of data? How might you improve
 >> these numbers?
 
 >> B5: (8 marks)
->> Describe your implementation of the "wait" system call and how it interacts 
+>> Describe your implementation of the "wait" system call and how it interacts
 >> with process termination for both the parent and child.
 
 >> B6: (5 marks)
->> Any access to user program memory at a user-specified address can fail due to 
->> a bad pointer value. Such accesses must cause the process to be terminated. 
->> System calls are fraught with such accesses, e.g. a "write" system call 
->> requires reading the system call number from the user stack, then each of the 
+>> Any access to user program memory at a user-specified address can fail due to
+>> a bad pointer value. Such accesses must cause the process to be terminated.
+>> System calls are fraught with such accesses, e.g. a "write" system call
+>> requires reading the system call number from the user stack, then each of the
 >> call's three arguments, then an arbitrary amount of user memory, and any of
->> these can fail at any point. This poses a design and error-handling problem: 
->> how do you best avoid obscuring the primary function of code in a morass of 
->> error-handling? Furthermore, when an error is detected, how do you ensure 
->> that all temporarily allocated resources (locks, buffers, etc.) are freed? 
->> In a paragraph, describe the strategy or strategies you adopted for managing 
+>> these can fail at any point. This poses a design and error-handling problem:
+>> how do you best avoid obscuring the primary function of code in a morass of
+>> error-handling? Furthermore, when an error is detected, how do you ensure
+>> that all temporarily allocated resources (locks, buffers, etc.) are freed?
+>> In a paragraph, describe the strategy or strategies you adopted for managing
 >> these issues.
 
 ---- SYNCHRONIZATION ----
 
 >> B7: (5 marks)
->> The "exec" system call returns -1 if loading the new executable fails, so it 
->> cannot return before the new executable has completed loading. How does your 
->> code ensure this? How is the load success/failure status passed back to the 
+>> The "exec" system call returns -1 if loading the new executable fails, so it
+>> cannot return before the new executable has completed loading. How does your
+>> code ensure this? How is the load success/failure status passed back to the
 >> thread that calls "exec"?
 
 >> B8: (5 marks)
->> Consider parent process P with child process C. How do you ensure proper 
->> synchronization and avoid race conditions when P calls wait(C) before or 
->> after C exits? How do you ensure that all resources are freed in each case? 
->> How about when P terminates, without waiting, before or after C exits? Your 
+>> Consider parent process P with child process C. How do you ensure proper
+>> synchronization and avoid race conditions when P calls wait(C) before or
+>> after C exits? How do you ensure that all resources are freed in each case?
+>> How about when P terminates, without waiting, before or after C exits? Your
 >> answer must cover all four cases mentioned above and address resource freeing.
 
 ---- RATIONALE ----
 
 >> B9: (5 marks)
->> Why did you choose to implement safe access of user memory from the kernel in 
+>> Why did you choose to implement safe access of user memory from the kernel in
 >> the way that you did?
 
 >> B10: (5 marks)
->> What advantages or disadvantages can you see to your design for file 
+>> What advantages or disadvantages can you see to your design for file
 >> descriptors?
 
 >> B11: (2 marks)
->> The default tid_t to pid_t mapping is the identity mapping. Did you change 
+>> The default tid_t to pid_t mapping is the identity mapping. Did you change
 >> this? Why?
