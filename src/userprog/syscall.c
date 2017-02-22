@@ -157,6 +157,7 @@ syscall_exit_aux (struct intr_frame *f, int status)
     }
 
   f->eax = status;
+  t->return_status = status;
   printf ("%s: exit(%d)\n", t->name, status);
   thread_exit ();
 }
@@ -226,6 +227,7 @@ syscall_write (struct intr_frame *f UNUSED)
     }
   else if (fd == STDIN_FILENO)
     {
+      lock_release (&file_lock);
       syscall_exit_aux (f, -1);
       return;
     }
@@ -235,6 +237,7 @@ syscall_write (struct intr_frame *f UNUSED)
 
       if (m == NULL)
         {
+          lock_release (&file_lock);
           syscall_exit_aux (f, -1);
           return;
         }

@@ -13,6 +13,7 @@
 #include "filesys/filesys.h"
 #include "threads/flags.h"
 #include "threads/init.h"
+#include "threads/malloc.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
@@ -28,29 +29,25 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name)
 {
-  char *fn_copy;
-  char *fn_copy_2;
-  char *name;
-  char *save_file;
-  tid_t tid;
-  struct thread *t;
+  /* Check if file_name executable exists */
 
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
+  char *fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  fn_copy_2 = palloc_get_page (0);
+  char *fn_copy_2 = palloc_get_page (0);
   if (fn_copy_2 == NULL)
     return TID_ERROR;
   strlcpy (fn_copy_2, file_name, PGSIZE);
 
-  name = strtok_r (fn_copy_2, " ", &save_file);
+  char *save_file;
+  char *name = strtok_r (fn_copy_2, " ", &save_file);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
+  tid_t tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
     {
       palloc_free_page (fn_copy);
@@ -58,7 +55,8 @@ process_execute (const char *file_name)
       return tid;
     }
 
-  t = get_thread_from_tid (tid);
+  struct thread *t = get_thread_from_tid (tid);
+  list_push_back (&thread_current ()->executing_children, &t->exec_children_elem);
 
   return tid;
 }
@@ -77,7 +75,6 @@ start_process (void *file_name_)
   int argc = 0;
   char* argv[100];
   void* stack_ptr;
-  struct thread *current;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -167,7 +164,34 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED)
 {
-  while (true) {}
+  struct fin_process_map *m = get_finished_children (child_tid);
+  if (m != NULL)
+    {
+      if (m->has_waited)
+        {
+          return -1;
+        }
+      else
+        {
+          m->has_waited = true;
+          return m->return_status;
+        }
+    }
+
+  // get the children
+  struct thread *child = get_exec_children (child_tid);
+
+  if (child == NULL || child->has_waited)
+    {
+      return -1;
+    }
+
+  child->has_waited = true;
+
+  sema_down (&thread_current ()->sema_wait);
+  struct fin_process_map *fin = get_finished_children (child_tid);
+  fin->has_waited = true;
+  return fin->return_status;
 }
 
 /* Free the current process's resources. */
@@ -176,6 +200,32 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
+
+  if (cur->parent != NULL)
+    {
+      // remove cur from parent's executing_children
+      // and move to finished_children
+      struct fin_process_map *map = (struct fin_process_map *)
+                                    malloc(sizeof(struct fin_process_map));
+      map->return_status = cur->return_status;
+      map->tid = cur->tid;
+      map->has_waited = cur->has_waited;
+      list_remove (&cur->exec_children_elem);
+      list_push_back (&cur->parent->finished_children, &map->elem);
+
+      // free all children
+      struct list_elem *e = list_begin (&cur->finished_children);
+
+      while (e != list_end (&cur->finished_children))
+        {
+          struct fin_process_map *m = list_entry (e,
+                                              struct fin_process_map, elem);
+          e = list_next (e);
+          free (m);
+        }
+
+      sema_up (&cur->parent->sema_wait);
+    }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
