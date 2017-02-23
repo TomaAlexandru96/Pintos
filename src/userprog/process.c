@@ -29,31 +29,17 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name)
 {
-  /* Check if file_name executable exists */
-
   /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
+    Otherwise there's a race between the caller and load(). */
   char *fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
-  char *fn_copy_2 = palloc_get_page (0);
-  if (fn_copy_2 == NULL)
-    return TID_ERROR;
-  strlcpy (fn_copy_2, file_name, PGSIZE);
-
-  char *save_file;
-  char *name = strtok_r (fn_copy_2, " ", &save_file);
-
   /* Create a new thread to execute FILE_NAME. */
-  tid_t tid = thread_create (name, PRI_DEFAULT, start_process, fn_copy);
+  tid_t tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    {
-      palloc_free_page (fn_copy);
-      palloc_free_page (fn_copy_2);
-      return tid;
-    }
+    palloc_free_page (fn_copy);
 
   struct thread *t = get_thread_from_tid (tid);
   list_push_back (&thread_current ()->executing_children, &t->exec_children_elem);
@@ -69,76 +55,65 @@ start_process (void *file_name_)
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
-  char *save_file;
-  char *name_token;
-  int i, j;
+  char *save_ptr;
+  const char *delim = " ";
   int argc = 0;
-  char* argv[100];
-  void* stack_ptr;
+  char *token = strtok_r (file_name, delim, &save_ptr);
+  char **argv = palloc_get_page (0);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+  success = load (token, &if_.eip, &if_.esp);
 
-  /* Extract name of file. */
-  name_token = strtok_r (file_name, " ", &save_file);
-
-  success = load (name_token, &if_.eip, &if_.esp);
-
-  stack_ptr = if_.esp;
-
-  /* Parse string and push each token on the stack. */
-  do
-  {
-    argv[argc] = name_token;
-    argc++;
-    name_token = strtok_r (NULL, " ", &save_file);
-  } while (name_token != NULL);
-
-  for (j = argc - 1; j >= 0; --j)
+  // tokenise the arguments and push them on stack
+  while (token != NULL)
     {
-      size_t length = strlen (argv[j]) + 1;
-      stack_ptr = (void*) (((char*) stack_ptr) - length);
-      strlcpy ((char*)stack_ptr, argv[j], length);
-      argv[j] = (char*) stack_ptr;
+      if_.esp = (void *) (((char *) if_.esp) - (strlen (token) + 1));
+      argv[argc] = (char *) if_.esp;
+      strlcpy ((char *) if_.esp, token, strlen (token) + 1);
+      argc++;
+      token = strtok_r (NULL, delim, &save_ptr);
     }
 
-  /* Round down stack_ptr to multiple of 4. */
-  stack_ptr = (void*) (((intptr_t) stack_ptr) & MULT_OF_FOUR_MASK);
+  int offset = ((uint32_t) if_.esp) % 4;
 
-  /* Push null sentinel on stack. */
-  stack_ptr = (((char**) stack_ptr) - 1);
-  *((char*)(stack_ptr)) = 0;
-
-  /* Push pointers to args on stack. */
-  for (i = argc - 1; i >= 0; --i)
+  // push alignment
+  for (int i = 0; i < offset; i++)
     {
-      stack_ptr = (((char**) stack_ptr) - 1);
-      *((char**) stack_ptr) = argv[i];
+      if_.esp = (void *) (((char *) if_.esp) - 1);
+      *((char *) if_.esp) = '\0';
     }
 
-  /* Push argv on stack. */
-  char** first_arg = (char**) stack_ptr;
-  stack_ptr = (((char**) stack_ptr) - 1);
-  *((char***) stack_ptr) = first_arg;
+  // push null and null pointer
+  if_.esp = (void *) (((uint32_t *) if_.esp) - 1);
+  *((uint32_t *) if_.esp) = (uint32_t) NULL;
 
-  /* Push argc on stack. */
-  int* stk_ptr = (int*) stack_ptr;
-  --stk_ptr;
-  *stk_ptr = argc;
-  stack_ptr = (void*) stk_ptr;
+  // push arguments pointers
+  for (int i = argc - 1; i >= 0; i--)
+    {
+      if_.esp = (void *) (((uint32_t *) if_.esp) - 1);
+      *((uint32_t *) if_.esp) = (uint32_t) argv[i];
+    }
 
-  /* Push null sentinel onto stack */
-  stack_ptr = (((void**) stack_ptr) - 1);
-  *((void**)(stack_ptr)) = 0;
+  // push argv pointer
+  uint32_t *argv_base = (uint32_t *) if_.esp;
+  if_.esp = (void *) (((uint32_t *) if_.esp) - 1);
+  *((uint32_t *) if_.esp) = (uint32_t) argv_base;
 
-  if_.esp = stack_ptr;
+  // push argc
+  if_.esp = (void *) (((uint32_t *) if_.esp) - 1);
+  *((uint32_t *) if_.esp) = (uint32_t) argc;
+
+  // push return address
+  if_.esp = (void *) (((uint32_t *) if_.esp) - 1);
+  *((uint32_t *) if_.esp) = 0;
 
   /* If load failed, quit. */
+  palloc_free_page (argv);
   palloc_free_page (file_name);
-
   if (!success)
     thread_exit ();
 

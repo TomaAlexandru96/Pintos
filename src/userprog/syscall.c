@@ -1,6 +1,7 @@
 #include <syscall-nr.h>
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include "threads/interrupt.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
@@ -143,6 +144,7 @@ syscall_exit (struct intr_frame *f UNUSED)
 static void
 syscall_exit_aux (struct intr_frame *f, int status)
 {
+  char *save_ptr;
   struct thread *t = thread_current ();
 
   // close all files
@@ -158,7 +160,10 @@ syscall_exit_aux (struct intr_frame *f, int status)
 
   f->eax = status;
   t->return_status = status;
-  printf ("%s: exit(%d)\n", t->name, status);
+  
+  char file_name[strlen(t->name) + 1];
+  strlcpy (file_name, t->name, strlen(t->name) + 1);
+  printf ("%s: exit(%d)\n", strtok_r (file_name, " ", &save_ptr), status);
   thread_exit ();
 }
 
