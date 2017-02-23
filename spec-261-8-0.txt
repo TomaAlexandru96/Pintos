@@ -33,33 +33,6 @@ None.
 >> global or static variable, `typedef', or enumeration. Identify the purpose of
 >> each in 25 words or less.
 
----- ALGORITHMS ----
-
->> A2: (8 marks)
->> Briefly describe how you implemented argument parsing. In particular you
->> should mention how you arrange for the elements of argv[] to be in the right
->> order and how you avoid overflowing the stack page?
-
----- RATIONALE ----
-
->> A3: (5 marks)
->> Why does Pintos implement strtok_r() but not strtok()?
-
->> A4: (10 marks)
->> In Pintos, the kernel separates commands into a executable name and
->> arguments. In Unix-like systems, the shell does this separation. Identify
->> at least two advantages of the Unix approach.
-
-                 SYSTEM CALLS
-                 ============
-
----- DATA STRUCTURES ----
-
->> B1: (10 marks)
->> Copy here the declaration of each new or changed `struct' or `struct' member,
->> global or static variable, `typedef', or enumeration. Identify the purpose of
->> each in 25 words or less.
-
 struct list open_files;
 
 This is a list of file_maps. It acts as a map from a file descriptor to a
@@ -80,8 +53,44 @@ struct file_map
 Keeps map from a file descriptor to a pointer to a file. It also has a
 list_elem, because we make a list of this struct.
 
-typedef void (*sys_func) (struct intr_frame *);
+---- ALGORITHMS ----
 
+>> A2: (8 marks)
+>> Briefly describe how you implemented argument parsing. In particular you
+>> should mention how you arrange for the elements of argv[] to be in the right
+>> order and how you avoid overflowing the stack page?
+
+---- RATIONALE ----
+
+>> A3: (5 marks)
+>> Why does Pintos implement strtok_r() but not strtok()?
+
+Because strtok() is not thread safe.  strtok() uses an internal state to
+remember the last position it has reached when parsing the input.  That means
+that if there is a thread switch while it runs, which can happen frequently in
+Pintos, it will not be able to carry on, as it can't remember where it was left
+at, strtok() is non-reentrant. on the other hand, strtok_r() has an extra argument,
+SAVE_PTR which is the address of the char pointer where the tokenizer was left
+at. So in the concurrent context of Pintos, strtok_r() is better because it is
+thread safe.
+
+>> A4: (10 marks)
+>> In Pintos, the kernel separates commands into a executable name and
+>> arguments. In Unix-like systems, the shell does this separation. Identify
+>> at least two advantages of the Unix approach.
+
+                 SYSTEM CALLS
+                 ============
+
+---- DATA STRUCTURES ----
+
+>> B1: (10 marks)
+>> Copy here the declaration of each new or changed `struct' or `struct' member,
+>> global or static variable, `typedef', or enumeration. Identify the purpose of
+>> each in 25 words or less.
+
+
+typedef void (*sys_func) (struct intr_frame *);
 
 
 >> B2: (5 marks)
@@ -113,16 +122,18 @@ we can have different open files having the same file descriptor number.
 >> Describe how your code ensures safe memory access of user provided data from
 >> within the kernel.
 
-
-Pintos works on a monolithic kernel. So any action done on the memory can be
-done only through system calls. Whenever a system call is done, we check that
-each argument is in the user space and also we check if if points to an
+Whenever a system call is done, we check that
+each argument is in the user space and also we check if it points to an
 allocated memory address. This is done by calling is_pointer_valid() on the
-pointer. If any of those conditions fails, it will call the exit() system call
-with an error code of -1. When an error occurs we close all the files open in
-the current process, then we call thread_exit() which will terminate the user
-process and will call the scheduler and run the next thread.
-
+pointer. At the top of the virtual memory is the kernel space and below it at
+lower addresses is the user space. The macro PHYS_BASE helps us define the
+beginning of the user address space. If the address is greater of equal to
+PHYS_BASE it means that it is not part of the user address space. Also if
+pagedir_get_page() returns NULL is means the page is not used. in the case of
+any of those conditions, exit() gets called with error code -1. When an error
+occurs we close all the files open in the current process, then we call
+thread_exit() which will terminate the user process and will call the scheduler
+and run the next thread.
 
 >> B4: (5 marks)
 >> Suppose a system call passes the kernel a pointer to a full page
@@ -132,9 +143,18 @@ process and will call the scheduler and run the next thread.
 >> call that passes a pointer to only 2 bytes of data? How might you improve
 >> these numbers?
 
+
+
+
+
+
+
 >> B5: (8 marks)
 >> Describe your implementation of the "wait" system call and how it interacts
 >> with process termination for both the parent and child.
+
+
+
 
 >> B6: (5 marks)
 >> Any access to user program memory at a user-specified address can fail due to
