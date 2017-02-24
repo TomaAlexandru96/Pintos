@@ -45,7 +45,9 @@ process_execute (const char *file_name)
   list_push_back (&thread_current ()->executing_children, &t->exec_children_elem);
   sema_down (&t->sema_load);
 
-  if (t->return_status == -1)
+  struct fin_process_map *m = get_finished_children (tid);
+
+  if (m != NULL && !m->has_loaded)
     return -1;
 
   return tid;
@@ -71,6 +73,13 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (token, &if_.eip, &if_.esp);
+
+  if (!success)
+    {
+      thread_current ()->has_loaded = false;
+      thread_current ()->return_status = -1;
+      thread_exit ();
+    }
 
   // tokenise the arguments and push them on stack
   while (token != NULL)
@@ -118,17 +127,9 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (argv);
   palloc_free_page (file_name);
-  if (!success)
-    {
-      thread_current ()->return_status = -1;
-      sema_up (&thread_current ()->sema_load);
-      thread_exit ();
-    }
-  else
-    {
-      thread_current ()->return_status = 0;
-      sema_up (&thread_current ()->sema_load);
-    }
+
+  thread_current ()->has_loaded = true;
+  sema_up (&thread_current ()->sema_load);
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -198,7 +199,9 @@ process_exit (void)
       map->return_status = cur->return_status;
       map->tid = cur->tid;
       map->has_waited = cur->has_waited;
+      map->has_loaded = cur->has_loaded;
       list_remove (&cur->exec_children_elem);
+
       list_push_back (&cur->parent->finished_children, &map->elem);
 
       // free all children
@@ -212,7 +215,11 @@ process_exit (void)
           free (m);
         }
 
-      sema_up (&cur->parent->sema_wait);
+      if (!cur->has_loaded)
+        sema_up (&thread_current ()->sema_load);
+
+      if (cur->has_waited)
+        sema_up (&cur->parent->sema_wait);
     }
 
   /* Destroy the current process's page directory and switch back

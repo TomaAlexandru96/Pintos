@@ -126,6 +126,7 @@ struct thread
     struct semaphore sema_load;         /* Secures successful loading */
     struct list_elem exec_children_elem;     /* Used by children list */
     bool has_waited;                    /* Parent process called wait */
+    bool has_loaded;                    /* If child has loaded succsefully */
     int return_status;                  /* The process exit status */
 #endif
 
@@ -142,6 +143,7 @@ struct fin_process_map
     tid_t tid;               /* Process idnetifier */
     int return_status;       /* The return status */
     bool has_waited;         /* Parent process called wait */
+    bool has_loaded;
     struct list_elem elem;
   };
 
@@ -173,7 +175,7 @@ void thread_unblock (struct thread *);
 struct thread *thread_current (void);
 tid_t thread_tid (void);
 const char *thread_name (void);
-struct thread *get_thread_from_tid (tid_t);
+struct thread *get_thread_from_tid (tid_t tid);
 struct thread *get_exec_children (tid_t tid);
 struct fin_process_map *get_finished_children (tid_t tid);
 

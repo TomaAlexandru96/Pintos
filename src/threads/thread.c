@@ -371,7 +371,9 @@ get_finished_children (tid_t child_tid)
   return NULL;
 }
 
-/* Returns the thread given the tid from list of all threads */
+/*
+  Returns the thread given the tid from list of all threads
+*/
 struct thread *
 get_thread_from_tid (tid_t tid)
 {
@@ -387,7 +389,6 @@ get_thread_from_tid (tid_t tid)
 
   return NULL;
 }
-
 
 /* Deschedules the current thread and destroys it.  Never
    returns to the caller. */
