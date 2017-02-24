@@ -66,6 +66,7 @@ start_process (void *file_name_)
   int argc = 0;
   char *token = strtok_r (file_name, delim, &save_ptr);
   char **argv = palloc_get_page (0);
+  char *exec_name = token;
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -124,11 +125,16 @@ start_process (void *file_name_)
   if_.esp = (void *) (((uint32_t *) if_.esp) - 1);
   *((uint32_t *) if_.esp) = 0;
 
+  // deny write as long as it is running
+  thread_current ()->deny_file = filesys_open (exec_name);
+  file_deny_write (thread_current ()->deny_file);
+
   /* If load failed, quit. */
   palloc_free_page (argv);
   palloc_free_page (file_name);
 
   thread_current ()->has_loaded = true;
+
   sema_up (&thread_current ()->sema_load);
 
   /* Start the user process by simulating a return from an
@@ -221,6 +227,8 @@ process_exit (void)
       if (cur->has_waited)
         sema_up (&cur->parent->sema_wait);
     }
+
+  file_close (cur->deny_file);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

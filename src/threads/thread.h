@@ -125,6 +125,7 @@ struct thread
     struct semaphore sema_wait;         /* Semaphore used by process_wait */
     struct semaphore sema_load;         /* Secures successful loading */
     struct list_elem exec_children_elem;     /* Used by children list */
+    struct file *deny_file;             /* Used by denying writes to executables feature */
     bool has_waited;                    /* Parent process called wait */
     bool has_loaded;                    /* If child has loaded succsefully */
     int return_status;                  /* The process exit status */
