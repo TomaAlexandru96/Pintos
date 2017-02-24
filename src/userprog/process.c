@@ -18,6 +18,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -29,6 +30,9 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name)
 {
+  // check validity of file_name
+
+
   /* Make a copy of FILE_NAME.
     Otherwise there's a race between the caller and load(). */
   char *fn_copy = palloc_get_page (0);
@@ -228,7 +232,24 @@ process_exit (void)
         sema_up (&cur->parent->sema_wait);
     }
 
+  // close all open files
+  struct list_elem *e = list_begin (&cur->open_files);
+
+  while (e != list_end (&cur->open_files))
+    {
+      struct file_map *file_m = list_entry (e, struct file_map, elem);
+      syscall_close_aux (file_m);
+      e = list_next (e);
+      free (file_m);
+    }
+
+  // allow writes
   file_close (cur->deny_file);
+
+  char *save_ptr;
+  char file_name[strlen(cur->name) + 1];
+  strlcpy (file_name, cur->name, strlen(cur->name) + 1);
+  printf ("%s: exit(%d)\n", strtok_r (file_name, " ", &save_ptr), cur->return_status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

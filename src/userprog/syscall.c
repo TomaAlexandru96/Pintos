@@ -42,7 +42,6 @@ static bool remove_fd (int fd);
 static struct file_map *get_filemap (int fd);
 static void is_pointer_valid (uint32_t *param, struct intr_frame *);
 static void syscall_exit_aux (struct intr_frame *f, int status);
-static void syscall_close_aux (struct intr_frame *f, struct file_map *fm);
 
 typedef void (*sys_func) (struct intr_frame *);
 
@@ -144,26 +143,11 @@ syscall_exit (struct intr_frame *f UNUSED)
 static void
 syscall_exit_aux (struct intr_frame *f, int status)
 {
-  char *save_ptr;
   struct thread *t = thread_current ();
-
-  // close all files
-  struct list_elem *e = list_begin (&thread_current ()->open_files);
-
-  while (e != list_end (&thread_current ()->open_files))
-    {
-      struct file_map *file_m = list_entry (e, struct file_map, elem);
-      syscall_close_aux (f, file_m);
-      e = list_next (e);
-      free (file_m);
-    }
 
   f->eax = status;
   t->return_status = status;
-  
-  char file_name[strlen(t->name) + 1];
-  strlcpy (file_name, t->name, strlen(t->name) + 1);
-  printf ("%s: exit(%d)\n", strtok_r (file_name, " ", &save_ptr), status);
+
   thread_exit ();
 }
 
@@ -384,12 +368,12 @@ syscall_close (struct intr_frame *f UNUSED)
   int fd = (int) GET_ARGUMENT (f, 1);
 
   struct file_map *fm = get_filemap (fd);
-  syscall_close_aux (f, fm);
+  syscall_close_aux (fm);
   free (fm);
 }
 
-static void
-syscall_close_aux (struct intr_frame *f UNUSED, struct file_map *fm)
+void
+syscall_close_aux (struct file_map *fm)
 {
   if (fm == NULL)
     {
