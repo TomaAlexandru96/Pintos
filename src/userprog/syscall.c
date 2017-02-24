@@ -1,6 +1,7 @@
 #include <syscall-nr.h>
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <string.h>
 #include "threads/interrupt.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
@@ -143,6 +144,7 @@ syscall_exit (struct intr_frame *f UNUSED)
 static void
 syscall_exit_aux (struct intr_frame *f, int status)
 {
+  char *save_ptr;
   struct thread *t = thread_current ();
 
   // close all files
@@ -156,9 +158,12 @@ syscall_exit_aux (struct intr_frame *f, int status)
       free (file_m);
     }
 
-  t->return_status = status;
   f->eax = status;
-  printf ("%s: exit(%d)\n", t->name, t->return_status);
+  t->return_status = status;
+  
+  char file_name[strlen(t->name) + 1];
+  strlcpy (file_name, t->name, strlen(t->name) + 1);
+  printf ("%s: exit(%d)\n", strtok_r (file_name, " ", &save_ptr), status);
   thread_exit ();
 }
 
@@ -169,7 +174,7 @@ syscall_wait (struct intr_frame *f UNUSED)
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int pid = (int) GET_ARGUMENT (f, 1);
 
-  f->eax = process_wait (pid);
+  f->eax = (uint32_t) process_wait (pid);
 }
 
 static void
@@ -227,6 +232,7 @@ syscall_write (struct intr_frame *f UNUSED)
     }
   else if (fd == STDIN_FILENO)
     {
+      lock_release (&file_lock);
       syscall_exit_aux (f, -1);
       return;
     }
@@ -236,6 +242,7 @@ syscall_write (struct intr_frame *f UNUSED)
 
       if (m == NULL)
         {
+          lock_release (&file_lock);
           syscall_exit_aux (f, -1);
           return;
         }

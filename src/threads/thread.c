@@ -109,6 +109,9 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  list_init (&initial_thread->executing_children);
+  list_init (&initial_thread->finished_children);
+  sema_init (&initial_thread->sema_wait, 0);
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -247,23 +250,15 @@ thread_create (const char *name, int priority,
     }
 
   #ifdef USERPROG
-  sema_init (&t->sema_process_wait, 0);
-  sema_init (&t->sema_process_exit, 0);
-  t->return_status = DEFAULT_RET_STATUS;
-
   t->last_fd = 2;
-  list_init (&t->children_processes);
   list_init (&t->open_files);
-  t->has_exited = false;
+  list_init (&t->executing_children);
+  list_init (&t->finished_children);
+  sema_init (&t->sema_load, 0);
+  sema_init (&t->sema_wait, 0);
+  t->has_waited = false;
   t->parent = thread_current ();
-
-  if (thread_current () != initial_thread)
-    {
-      list_push_back (&thread_current ()->children_processes,
-                      &t->child_process);
-    }
   #endif
-
 
   return tid;
 }
@@ -340,6 +335,42 @@ thread_tid (void)
   return thread_current ()->tid;
 }
 
+struct thread *
+get_exec_children (tid_t child_tid)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&thread_current ()->executing_children);
+       e != list_end (&thread_current ()->executing_children);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, exec_children_elem);
+      if (t->tid == child_tid)
+        {
+          return t;
+        }
+    }
+  return NULL;
+}
+
+struct fin_process_map *
+get_finished_children (tid_t child_tid)
+{
+  struct list_elem *e;
+
+  for (e = list_begin (&thread_current ()->finished_children);
+       e != list_end (&thread_current ()->finished_children);
+       e = list_next (e))
+    {
+      struct fin_process_map *m = list_entry (e, struct fin_process_map, elem);
+      if (m->tid == child_tid)
+        {
+          return m;
+        }
+    }
+  return NULL;
+}
+
 /* Returns the thread given the tid from list of all threads */
 struct thread *
 get_thread_from_tid (tid_t tid)
@@ -366,30 +397,7 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  struct list_elem *e;
-  struct thread *current = thread_current ();
-
-  for (e = list_begin (&current->children_processes);
-       e != list_end (&current->children_processes);
-       e = list_next (e))
-    {
-      struct thread *t = list_entry (e, struct thread, child_process);
-      if (t->has_exited == true)
-        {
-          sema_up (&t->sema_process_exit);
-        }
-      else
-        {
-          t->parent = NULL;
-          list_remove (&t->child_process);
-        }
-    }
-
   process_exit ();
-
-  if (current->parent != NULL && current->parent != initial_thread)
-  list_remove (&current->child_process);
-
 #endif
 
   /* Remove thread from all threads list, set our status to dying,
@@ -398,10 +406,6 @@ thread_exit (void)
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
-  if (thread_current ()->pagedir != NULL)
-    {
-      pagedir_destroy(thread_current ()->pagedir);
-    }
   schedule ();
   NOT_REACHED ();
 }
@@ -865,4 +869,3 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
-
