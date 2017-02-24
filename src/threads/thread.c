@@ -254,6 +254,7 @@ thread_create (const char *name, int priority,
   list_init (&t->open_files);
   list_init (&t->executing_children);
   list_init (&t->finished_children);
+  sema_init (&t->sema_load, 0);
   sema_init (&t->sema_wait, 0);
   t->has_waited = false;
   t->parent = thread_current ();

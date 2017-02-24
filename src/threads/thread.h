@@ -123,6 +123,7 @@ struct thread
     struct list finished_children;      /* Keeps a reference to all finished_children */
     struct thread *parent;              /* Reference to parent process */
     struct semaphore sema_wait;         /* Semaphore used by process_wait */
+    struct semaphore sema_load;         /* Secures successful loading */
     struct list_elem exec_children_elem;     /* Used by children list */
     bool has_waited;                    /* Parent process called wait */
     int return_status;                  /* The process exit status */
