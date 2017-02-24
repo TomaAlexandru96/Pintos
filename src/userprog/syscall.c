@@ -289,6 +289,7 @@ syscall_exec (struct intr_frame *f UNUSED)
 {
   ARGUMENTS_IN_USER_SPACE (f, 1);
   const char *cmd = (const char *) GET_ARGUMENT (f, 1);
+  is_pointer_valid ((uint32_t *) cmd, f);
 
   tid_t tid = process_execute (cmd);
 

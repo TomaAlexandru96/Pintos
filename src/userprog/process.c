@@ -30,9 +30,6 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name)
 {
-  // check validity of file_name
-
-
   /* Make a copy of FILE_NAME.
     Otherwise there's a race between the caller and load(). */
   char *fn_copy = palloc_get_page (0);
