@@ -33,25 +33,7 @@ None.
 >> global or static variable, `typedef', or enumeration. Identify the purpose of
 >> each in 25 words or less.
 
-struct list open_files;
-
-This is a list of file_maps. It acts as a map from a file descriptor to a
-pointer of an open file.
-
-int last_fd;
-
-it is used to keep the file descriptor of the current process and to assign a fd
-to a newly open file.
-
-struct file_map
-  {
-    int fd;
-    struct file *f;
-    struct list_elem elem;
-  };
-
-Keeps map from a file descriptor to a pointer to a file. It also has a
-list_elem, because we make a list of this struct.
+None.
 
 ---- ALGORITHMS ----
 
@@ -60,12 +42,34 @@ list_elem, because we make a list of this struct.
 >> should mention how you arrange for the elements of argv[] to be in the right
 >> order and how you avoid overflowing the stack page?
 
+
+We use strtok_r() to tokenise the arguments at each whitespace. The first call
+gives the first token. We also allocate a page to store the arguemnts by making
+argv th to point to that page. For each 
+token, we first make space on the stack by decrementing the interrupt frame stack 
+pointer by the size of the token includeing the null terminator, because the 
+stack grows downwards. The string value of the token is copied on the stack
+where the stack pointer is at. We than push the aligment on the stack by
+decrementing the stack pointer a number of time equal to the stack pointer mod
+4, as the addresses are 4 bytes. We then push the NULL sentinel. After that, for
+each argument, we make space on the stack and push their pointer in reverse
+order, because we use the value of argc to iterate through them, and before
+doing this argc already reached the number of arguments. In the end we make
+space and push the pointer to the arguments, arguments count and the return
+address, which is 0 and then we free the page used to store the arguments.
+We amke sure theat the arguments and their addresses are pushed in the right by
+using argc to keep track of the index of the argument that is to be pushed and
+we increment it's value of ther each push. 
+
+NB : avoid overflow.
+
+
 ---- RATIONALE ----
 
 >> A3: (5 marks)
 >> Why does Pintos implement strtok_r() but not strtok()?
 
-Because strtok() is not thread safe.  strtok() uses an internal state to
+Because strtok() is not thread safe. strtok() uses an internal state to
 remember the last position it has reached when parsing the input.  That means
 that if there is a thread switch while it runs, which can happen frequently in
 Pintos, it will not be able to carry on, as it can't remember where it was left
@@ -79,6 +83,22 @@ thread safe.
 >> arguments. In Unix-like systems, the shell does this separation. Identify
 >> at least two advantages of the Unix approach.
 
+Firstly, in Pintos, if an exception such as a page fault or a bad pointer occurs, then the
+kernel panics and the OS crushes. On the other hand, the shell is a user
+process, so if a page fault occurs in  a user process, in an Unix-like system
+the kernel will recieve an exit code of -1 from that process and it will
+terminate that process, it will free the resources and it will call the
+scheduler.
+Secondly, the Pintos kernel is non-preemptive, which means that the kernel
+process has to run untill it is done or an interrupt has occured. If the command
+to be run is very long, has many arguments or has to wait for the user to input
+more arguments form the command line, then no other process can run. In an
+Unix-like system, because the command is separated by the shell, which is a
+user process and can be preempted in case it takes to long, means that you can
+run multiple concurrent processes as the shell parses the command or waits for
+command line arguments.
+
+
                  SYSTEM CALLS
                  ============
 
@@ -89,8 +109,87 @@ thread safe.
 >> global or static variable, `typedef', or enumeration. Identify the purpose of
 >> each in 25 words or less.
 
+The following were implemented in thread.h
+
+struct list open_files;
+
+This is a list of file_maps. It acts as a map from a file descriptor to a
+pointer of an open file.
+
+int last_fd;
+
+it is used to keep the file descriptor of the current process and to assign a fd
+to a newly open file.
+
+struct list execuing_children;
+
+List of the current executing children of the parent process. When a process 
+strats executing it is added to this list and it is removed when a process 
+exits, it is removed from here and eadded to finished children list. Used 
+in process_wait to get the child of a process. 
+
+
+struct list finished_children;
+
+List of finished children. Used in process_wait to check if the proces has
+finished. If not, the either it is an error or set its has_wiated to true and
+return its return status.
+
+
+struct thread *parent;
+
+Refernce to parent process. Used in process_exit to add the current thread that
+exits to the parent's finished executing children list.
+
+
+struct semaphore sema_wait;
+
+Used in process_wait and process exit to ensure the process exits after its
+resources were freed. It is downed when the process starts waiting and it is
+upped after the process is has finished waiting and all the resources were
+freed.
+
+struct semaphore sema_load
+
+Used to ensure successful loading, by waiting for a process to load.
+
+
+struct list_elem exec_children_elem;
+
+Used to implement a list of executing child processes held by the parent on
+struct thread.
+
+struct file *deny_file;
+
+bool has_waited;
+
+True if the process has waited.
+
+
+bool has_loaded;
+
+True if the process has loaded successfully.
+
+int return_status;
+
+Keeps the return starus of a process.
+
+struct file_map
+  {
+    int fd;
+    struct file *f;
+    struct list_elem elem;
+  };
+
+Keeps map from a file descriptor to a pointer to a file. It also has a
+list_elem, because we make a list of this struct.
+
 
 typedef void (*sys_func) (struct intr_frame *);
+
+static struct lock file_lock;
+
+static sys_func syscall_map[32];
 
 
 >> B2: (5 marks)
@@ -143,17 +242,20 @@ and run the next thread.
 >> call that passes a pointer to only 2 bytes of data? How might you improve
 >> these numbers?
 
-
-
-
-
+Greu...
 
 
 >> B5: (8 marks)
 >> Describe your implementation of the "wait" system call and how it interacts
 >> with process termination for both the parent and child.
 
-
+We first check if the process is in the finished children list of its parent. If
+it is, we check if it already waited, but it was not terminated. If yes, we
+return -1 as an exception occured. Else, we say that it waited and we return its
+return_status. If the process is not finished, then we set that all its children
+have waited and we down the wait semaphore, to wait for process_exit to free all
+its children. After that we up the has_waited semaphore to let process_wait to
+give the return status of the finished process.
 
 
 >> B6: (5 marks)
@@ -169,6 +271,16 @@ and run the next thread.
 >> In a paragraph, describe the strategy or strategies you adopted for managing
 >> these issues.
 
+We implementd a function is_pointer_valid that returns false whenever the
+pointer is bad. Whenever there is any access to the user memory, it needs to go
+through the system call handler, so at each system call we check if the pointer
+arguments are valid. If the pointer is not valid, we need to exit the process
+with an error status of -1. To do this we return -1 by placing it in the eax
+register of the current interurpt frame and we set the return status of the
+current thread to -1. We then call thread_exit(). Which call process_exit to
+deallocate the resources held by the current process such as its children. Once
+all the resources are freed, the process is compleatley terminated.
+
 ---- SYNCHRONIZATION ----
 
 >> B7: (5 marks)
@@ -176,6 +288,9 @@ and run the next thread.
 >> cannot return before the new executable has completed loading. How does your
 >> code ensure this? How is the load success/failure status passed back to the
 >> thread that calls "exec"?
+
+When the new process is executed, in porcess_execute(), 
+
 
 >> B8: (5 marks)
 >> Consider parent process P with child process C. How do you ensure proper
@@ -197,3 +312,9 @@ and run the next thread.
 >> B11: (2 marks)
 >> The default tid_t to pid_t mapping is the identity mapping. Did you change
 >> this? Why?
+
+No, because when we create a new process, its pid will be set to the tid, for
+each user process. Each process has one thread and they share the pid. When a
+new process is created, its pid will take the tid vlaue of the thread that runs
+it. This makes it easier to reason about processes. Changing that would make is
+unecessarly complicated.
