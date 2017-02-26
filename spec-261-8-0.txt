@@ -33,7 +33,7 @@ None.
 >> global or static variable, `typedef', or enumeration. Identify the purpose of
 >> each in 25 words or less.
 
-None.
+None. The declarations we did were for part B.
 
 ---- ALGORITHMS ----
 
@@ -305,9 +305,41 @@ When the new process is executed, in porcess_execute(),
 >> Why did you choose to implement safe access of user memory from the kernel in
 >> the way that you did?
 
+Because it took little time to implementat and it was easy to debug. We found
+it easier to check in the system call if the user pointer is valid, because the
+kernel only accesses the user memory using system calls. If the pointer is bad,
+then exit() will call thread_exit() which calls process_exit(), which frees all
+the resources of the process. If we were to do it by changing the page_fault()
+implementation, we would need to call process_exit() here which free all the
+process' children and also at the end it free page. The problem with this
+approach is that we need to be able to tell the kernel that a page fault
+occured, by setting the current thread's return status to -1. The problem lies
+in the fact that we need to get the resturn status from a thread which has been
+destoyed, so the implementation is more complex, as we'd need to deal with more
+concurrency issues.
+
 >> B10: (5 marks)
 >> What advantages or disadvantages can you see to your design for file
 >> descriptors?
+
+One disadvantage of the fact thet we use a list of pairs to map a file descriptor 
+to an open file pointer, which are not dinamically allocated. This means that 
+add another list in thread.h and an int, which takes more space on the page 
+it is allocated, threfore we have less space for the stack of the thread 
+that runs inside the user process. The magic constant in thread.h is used to
+detect stack overflows, but it can't detect if the thread struct grows too big,
+therefore, in this case, we are aware that the data at the bottom of the stack
+can get corrupted, if we decide to add more structs on thred, which we shall not.
+
+One advantage is that it is very easy to assign file descrip numbers to open
+files, because we keep track of the last fd used, so a newly open file will take
+the fd number of the current process, and then we increment current process' fd.
+Therefore, the design was simple, easy to implement and easy to debug.
+
+Another adavantage is that each process keeps a list of its open files. This
+ensure encapsulation. Even is we can have two file with the same fd at the OS
+level, a file can be accesses only by its parent process. This also avoid
+concurrency bugs.
 
 >> B11: (2 marks)
 >> The default tid_t to pid_t mapping is the identity mapping. Did you change
