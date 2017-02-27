@@ -86,6 +86,12 @@ start_process (void *file_name_)
   // tokenise the arguments and push them on stack
   while (token != NULL)
     {
+      if (argc > 1023)
+        {
+          thread_current ()->has_loaded = false;
+          thread_current ()->return_status = -1;
+          thread_exit ();
+        }
       if_.esp = (void *) (((char *) if_.esp) - (strlen (token) + 1));
       argv[argc] = (char *) if_.esp;
       strlcpy ((char *) if_.esp, token, strlen (token) + 1);

@@ -40,7 +40,7 @@ static void syscall_close (struct intr_frame *);
 
 static bool remove_fd (int fd);
 static struct file_map *get_filemap (int fd);
-static void is_pointer_valid (uint32_t *param, struct intr_frame *);
+static void is_pointer_valid (const void *param, struct intr_frame *);
 static void syscall_exit_aux (struct intr_frame *f, int status);
 
 typedef void (*sys_func) (struct intr_frame *);
@@ -71,7 +71,7 @@ syscall_init (void)
 }
 
 static void
-is_pointer_valid (uint32_t *param, struct intr_frame *f UNUSED)
+is_pointer_valid (const void *param, struct intr_frame *f UNUSED)
 {
   if (!is_user_vaddr (param) || (pagedir_get_page (thread_current ()->pagedir,
                                                   param) == NULL))
@@ -202,9 +202,10 @@ syscall_write (struct intr_frame *f UNUSED)
 {
   ARGUMENTS_IN_USER_SPACE (f, 3);
   int fd = (int) GET_ARGUMENT (f, 1);
-  const void *buffer = (const char *) GET_ARGUMENT (f, 2);
+  const char *buffer = (const char *) GET_ARGUMENT (f, 2);
   unsigned length = (unsigned) GET_ARGUMENT (f, 3);
-  is_pointer_valid ((uint32_t *) buffer, f);
+  is_pointer_valid (buffer, f);
+  is_pointer_valid (buffer + length - 1, f);
 
   uint32_t size_written = 0;
 
@@ -323,7 +324,8 @@ syscall_read (struct intr_frame *f UNUSED)
   int fd = (int) GET_ARGUMENT (f, 1);
   void *buffer = (void *) GET_ARGUMENT (f, 2);
   unsigned size = (unsigned) GET_ARGUMENT (f, 3);
-  is_pointer_valid ((uint32_t *) buffer, f);
+  is_pointer_valid (buffer, f);
+  is_pointer_valid (buffer + size - 1, f);
 
   struct file_map *m = get_filemap (fd);
 
