@@ -368,5 +368,5 @@ Therefore, the design was simple, easy to implement and easy to debug.
 No, because when we create a new process, its pid will be set to the tid, for
 each user process. Each process has one thread and they share the pid. When a
 new process is created, its pid will take the tid value of the thread that runs
-it. This makes it easier to reason about processes. Changing that would make is
+it. This makes it easier to reason about processes. Changing that would make it
 more complicated.
