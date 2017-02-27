@@ -42,26 +42,23 @@ None. The declarations we did were for part B.
 >> should mention how you arrange for the elements of argv[] to be in the right
 >> order and how you avoid overflowing the stack page?
 
-
 We use strtok_r() to tokenise the arguments at each whitespace. The first call
-gives the first token. We also allocate a page to store the arguemnts by making
-argv th to point to that page. For each 
-token, we first make space on the stack by decrementing the interrupt frame stack 
-pointer by the size of the token includeing the null terminator, because the 
+gives the first token. We also allocate a page to store the arguments by making
+argv the to point to that page. For each
+token, we first make space on the stack by decrementing the interrupt frame stack
+pointer by the size of the token including the null terminator, because the
 stack grows downwards. The string value of the token is copied on the stack
-where the stack pointer is at. We than push the aligment on the stack by
+where the stack pointer is at. We then push the alignment on the stack by
 decrementing the stack pointer a number of time equal to the stack pointer mod
 4, as the addresses are 4 bytes. We then push the NULL sentinel. After that, for
-each argument, we make space on the stack and push their pointer in reverse
+each argument, we make space on the stack and push their pointers in reverse
 order, because we use the value of argc to iterate through them, and before
-doing this argc already reached the number of arguments. In the end we make
-space and push the pointer to the arguments, arguments count and the return
+doing this, argc already reached the number of arguments. In the end we make
+space and push the pointers to the arguments, arguments count and the return
 address, which is 0 and then we free the page used to store the arguments.
-We amke sure theat the arguments and their addresses are pushed in the right by
-using argc to keep track of the index of the argument that is to be pushed and
-we increment it's value of ther each push. 
-
-NB : avoid overflow.
+We make sure that the arguments and their addresses are pushed in the right
+order  by using argc to keep track of the index of the argument that is to be
+pushed and we increment it's value of their each push.
 
 
 ---- RATIONALE ----
@@ -73,7 +70,7 @@ Because strtok() is not thread safe. strtok() uses an internal state to
 remember the last position it has reached when parsing the input.  That means
 that if there is a thread switch while it runs, which can happen frequently in
 Pintos, it will not be able to carry on, as it can't remember where it was left
-at, strtok() is non-reentrant. on the other hand, strtok_r() has an extra argument,
+at, strtok() is non-reentrant. On the other hand, strtok_r() has an extra argument,
 SAVE_PTR which is the address of the char pointer where the tokenizer was left
 at. So in the concurrent context of Pintos, strtok_r() is better because it is
 thread safe.
@@ -85,12 +82,12 @@ thread safe.
 
 Firstly, in Pintos, if an exception such as a page fault or a bad pointer occurs, then the
 kernel panics and the OS crushes. On the other hand, the shell is a user
-process, so if a page fault occurs in  a user process, in an Unix-like system
-the kernel will recieve an exit code of -1 from that process and it will
+process, so if a page fault occurs in a user process, in an Unix-like system
+the kernel will receive an exit code of -1 from that process and it will
 terminate that process, it will free the resources and it will call the
 scheduler.
 Secondly, the Pintos kernel is non-preemptive, which means that the kernel
-process has to run untill it is done or an interrupt has occured. If the command
+process has to run until it is done or an interrupt has occurred. If the command
 to be run is very long, has many arguments or has to wait for the user to input
 more arguments form the command line, then no other process can run. In an
 Unix-like system, because the command is separated by the shell, which is a
@@ -118,27 +115,27 @@ pointer of an open file.
 
 int last_fd;
 
-it is used to keep the file descriptor of the current process and to assign a fd
+It is used to keep the file descriptor of the current process and to assign a fd
 to a newly open file.
 
 struct list execuing_children;
 
-List of the current executing children of the parent process. When a process 
-strats executing it is added to this list and it is removed when a process 
-exits, it is removed from here and eadded to finished children list. Used 
-in process_wait to get the child of a process. 
+List of the current executing children of the parent process. When a process
+starts executing it is added to this list and it is removed when a process
+exits, it is removed from here and added to finished children list. Used
+in process_wait to get the child of a process.
 
 
 struct list finished_children;
 
-List of finished children. Used in process_wait to check if the proces has
-finished. If not, the either it is an error or set its has_wiated to true and
+List of finished children. Used in process_wait to check if the process has
+finished. If not, then either it is an error or set its has_waited to true and
 return its return status.
 
 
 struct thread *parent;
 
-Refernce to parent process. Used in process_exit to add the current thread that
+Reference to parent process. Used in process_exit to add the current thread that
 exits to the parent's finished executing children list.
 
 
@@ -146,7 +143,7 @@ struct semaphore sema_wait;
 
 Used in process_wait and process exit to ensure the process exits after its
 resources were freed. It is downed when the process starts waiting and it is
-upped after the process is has finished waiting and all the resources were
+upped after the process has finished waiting and all the resources were
 freed.
 
 struct semaphore sema_load
@@ -172,7 +169,7 @@ True if the process has loaded successfully.
 
 int return_status;
 
-Keeps the return starus of a process.
+Keeps the return status of a process.
 
 struct file_map
   {
@@ -181,9 +178,10 @@ struct file_map
     struct list_elem elem;
   };
 
-Keeps map from a file descriptor to a pointer to a file. It also has a
+Keeps map from a file descriptor to a file pointer. It also has a
 list_elem, because we make a list of this struct.
 
+NB:
 
 typedef void (*sys_func) (struct intr_frame *);
 
@@ -242,7 +240,18 @@ and run the next thread.
 >> call that passes a pointer to only 2 bytes of data? How might you improve
 >> these numbers?
 
-Greu...
+First, you need to check is the pointer is valid, so one call. Then you need to
+use get_user() to copy the page byte-by-byte from the user address space. You
+then need to call pagedir_get_page() one more time at the next page to make sure
+that the bytes on the page were aligned, and you actually copied the entire
+content, so this means that you need at least 2 calls. On the other hand, you
+could do this by calling pagedir_get_page() 4 times for each byte on the page,
+so it would take at most 4 calls.
+If you are interested in copying only only 2 bytes, then you can do it with 2
+calls to pagedir_get_page(), one to copy the first byte and the other to copy
+the second. You could decrease this number by changing the function so that
+it takes an additional arguments, the number of contiguous bytes to be copied,
+this way you could call it only once, and tell it to copy 2 bytes.
 
 
 >> B5: (8 marks)
@@ -251,7 +260,7 @@ Greu...
 
 We first check if the process is in the finished children list of its parent. If
 it is, we check if it already waited, but it was not terminated. If yes, we
-return -1 as an exception occured. Else, we say that it waited and we return its
+return -1 as an exception occurred. Else, we say that it waited and we return its
 return_status. If the process is not finished, then we set that all its children
 have waited and we down the wait semaphore, to wait for process_exit to free all
 its children. After that we up the has_waited semaphore to let process_wait to
@@ -271,15 +280,15 @@ give the return status of the finished process.
 >> In a paragraph, describe the strategy or strategies you adopted for managing
 >> these issues.
 
-We implementd a function is_pointer_valid that returns false whenever the
+We implemented a function is_pointer_valid that returns false whenever the
 pointer is bad. Whenever there is any access to the user memory, it needs to go
 through the system call handler, so at each system call we check if the pointer
 arguments are valid. If the pointer is not valid, we need to exit the process
 with an error status of -1. To do this we return -1 by placing it in the eax
-register of the current interurpt frame and we set the return status of the
+register of the current interrupted frame and we set the return status of the
 current thread to -1. We then call thread_exit(). Which call process_exit to
 deallocate the resources held by the current process such as its children. Once
-all the resources are freed, the process is compleatley terminated.
+all the resources are freed, the process is completely terminated.
 
 ---- SYNCHRONIZATION ----
 
@@ -289,7 +298,7 @@ all the resources are freed, the process is compleatley terminated.
 >> code ensure this? How is the load success/failure status passed back to the
 >> thread that calls "exec"?
 
-When the new process is executed, in porcess_execute(), 
+When the new process is executed, in process_execute(),
 
 
 >> B8: (5 marks)
@@ -305,7 +314,7 @@ When the new process is executed, in porcess_execute(),
 >> Why did you choose to implement safe access of user memory from the kernel in
 >> the way that you did?
 
-Because it took little time to implementat and it was easy to debug. We found
+Because it took little time to implement and it was easy to debug. We found
 it easier to check in the system call if the user pointer is valid, because the
 kernel only accesses the user memory using system calls. If the pointer is bad,
 then exit() will call thread_exit() which calls process_exit(), which frees all
@@ -313,32 +322,32 @@ the resources of the process. If we were to do it by changing the page_fault()
 implementation, we would need to call process_exit() here which free all the
 process' children and also at the end it free page. The problem with this
 approach is that we need to be able to tell the kernel that a page fault
-occured, by setting the current thread's return status to -1. The problem lies
-in the fact that we need to get the resturn status from a thread which has been
-destoyed, so the implementation is more complex, as we'd need to deal with more
+occurred, by setting the current thread's return status to -1. The problem lies
+in the fact that we need to get the return status from a thread which has been
+destroyed, so the implementation is more complex, as we'd need to deal with more
 concurrency issues.
 
 >> B10: (5 marks)
 >> What advantages or disadvantages can you see to your design for file
 >> descriptors?
 
-One disadvantage of the fact thet we use a list of pairs to map a file descriptor 
-to an open file pointer, which are not dinamically allocated. This means that 
-add another list in thread.h and an int, which takes more space on the page 
-it is allocated, threfore we have less space for the stack of the thread 
+One disadvantage is the fact that we use a list of pairs to map a file descriptor
+to an open file pointer, which are not dynamically allocated. This means that we
+keep another list in thread.h and an int, which takes more space on the page
+it is allocated, therefore we have less space for the stack of the thread
 that runs inside the user process. The magic constant in thread.h is used to
 detect stack overflows, but it can't detect if the thread struct grows too big,
 therefore, in this case, we are aware that the data at the bottom of the stack
-can get corrupted, if we decide to add more structs on thred, which we shall not.
+can get corrupted, if we decide to add more structs on thread, which we shall not.
 
-One advantage is that it is very easy to assign file descrip numbers to open
+One advantage is that it is very easy to assign file descriptor numbers to open
 files, because we keep track of the last fd used, so a newly open file will take
 the fd number of the current process, and then we increment current process' fd.
 Therefore, the design was simple, easy to implement and easy to debug.
 
-Another adavantage is that each process keeps a list of its open files. This
-ensure encapsulation. Even is we can have two file with the same fd at the OS
-level, a file can be accesses only by its parent process. This also avoid
+Another advantage is that each process keeps a list of its open files. This
+ensures encapsulation. Even if we can have two file with the same fd at the OS
+level, a file can be accessed only by its parent process. This also avoids
 concurrency bugs.
 
 >> B11: (2 marks)
@@ -347,6 +356,6 @@ concurrency bugs.
 
 No, because when we create a new process, its pid will be set to the tid, for
 each user process. Each process has one thread and they share the pid. When a
-new process is created, its pid will take the tid vlaue of the thread that runs
+new process is created, its pid will take the tid valaue of the thread that runs
 it. This makes it easier to reason about processes. Changing that would make is
-unecessarly complicated.
+more complicated.
