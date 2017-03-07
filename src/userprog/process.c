@@ -18,6 +18,7 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/frame.h"
 #include "syscall.h"
 
 static thread_func start_process NO_RETURN;
@@ -32,7 +33,7 @@ process_execute (const char *file_name)
 {
   /* Make a copy of FILE_NAME.
     Otherwise there's a race between the caller and load(). */
-  char *fn_copy = palloc_get_page (0);
+  char *fn_copy = frame_get_page ();
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
@@ -40,7 +41,7 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid_t tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy);
+    frame_remove_page (fn_copy);
 
   struct thread *t = get_thread_from_tid (tid);
   list_push_back (&thread_current ()->executing_children, &t->exec_children_elem);
@@ -66,7 +67,7 @@ start_process (void *file_name_)
   const char *delim = " ";
   int argc = 0;
   char *token = strtok_r (file_name, delim, &save_ptr);
-  char **argv = palloc_get_page (0);
+  char **argv = frame_get_page ();
   char *exec_name = token;
 
   /* Initialize interrupt frame and load executable. */
@@ -137,8 +138,8 @@ start_process (void *file_name_)
   file_deny_write (thread_current ()->deny_file);
 
   /* If load failed, quit. */
-  palloc_free_page (argv);
-  palloc_free_page (file_name);
+  frame_remove_page (argv);
+  frame_remove_page (file_name);
 
   thread_current ()->has_loaded = true;
 
@@ -553,14 +554,14 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
+      uint8_t *kpage = frame_get_page ();
       if (kpage == NULL)
         return false;
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-          palloc_free_page (kpage);
+          frame_remove_page (kpage);
           return false;
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -568,7 +569,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable))
         {
-          palloc_free_page (kpage);
+          frame_remove_page (kpage);
           return false;
         }
 
