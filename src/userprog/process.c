@@ -33,15 +33,16 @@ process_execute (const char *file_name)
 {
   /* Make a copy of FILE_NAME.
     Otherwise there's a race between the caller and load(). */
-  char *fn_copy = frame_get_page ();
+  struct frame_table_entry *ft_fn = frame_get_page (false);
+  char *fn_copy = ft_fn->pg_addr;
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
   /* Create a new thread to execute FILE_NAME. */
-  tid_t tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  tid_t tid = thread_create (file_name, PRI_DEFAULT, start_process, ft_fn);
   if (tid == TID_ERROR)
-    frame_remove_page (fn_copy);
+    frame_remove_page (ft_fn);
 
   struct thread *t = get_thread_from_tid (tid);
   list_push_back (&thread_current ()->executing_children, &t->exec_children_elem);
@@ -58,16 +59,17 @@ process_execute (const char *file_name)
 /* A thread function that loads a user process and starts it
    running. */
 static void
-start_process (void *file_name_)
+start_process (void *ft_fn)
 {
-  char *file_name = file_name_;
+  char *file_name = ((struct frame_table_entry *) ft_fn)->pg_addr;
   struct intr_frame if_;
   bool success;
   char *save_ptr;
   const char *delim = " ";
   int argc = 0;
   char *token = strtok_r (file_name, delim, &save_ptr);
-  char **argv = frame_get_page ();
+  struct frame_table_entry *ft_argv = frame_get_page (false);
+  char **argv = ft_argv->pg_addr;
   char *exec_name = token;
 
   /* Initialize interrupt frame and load executable. */
@@ -138,8 +140,8 @@ start_process (void *file_name_)
   file_deny_write (thread_current ()->deny_file);
 
   /* If load failed, quit. */
-  frame_remove_page (argv);
-  frame_remove_page (file_name);
+  frame_remove_page (ft_argv);
+  frame_remove_page (ft_fn);
 
   thread_current ()->has_loaded = true;
 
@@ -554,14 +556,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      uint8_t *kpage = frame_get_page ();
+      struct frame_table_entry *ft_kpage = frame_get_page (false);
+      uint8_t *kpage = ft_kpage->pg_addr;
       if (kpage == NULL)
         return false;
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-          frame_remove_page (kpage);
+          frame_remove_page (ft_kpage);
           return false;
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -569,7 +572,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable))
         {
-          frame_remove_page (kpage);
+          frame_remove_page (ft_kpage);
           return false;
         }
 
@@ -589,14 +592,15 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  struct frame_table_entry *ft_kpage = frame_get_page (true);
+  kpage = ft_kpage->pg_addr;
   if (kpage != NULL)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
       else
-        palloc_free_page (kpage);
+        frame_remove_page (ft_kpage);
     }
   return success;
 }
