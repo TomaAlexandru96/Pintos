@@ -67,17 +67,15 @@ page_insert_data (void *addr)
 
 void 
 page_remove_data (void *addr)
-{
-  lock_acquire (&page_lock);
-  
+{ 
   struct page_table_entry *h_entry = page_get_data (addr);
   ASSERT (h_entry != NULL);
+  lock_acquire (&page_lock);
   struct hash_elem *el = hash_delete (&page_table, &h_entry->hash_elem);
   ASSERT (el != NULL);
 
   struct page_table_entry *removed_entry = hash_entry (el,
                                   struct page_table_entry, hash_elem);
-  palloc_free_page (removed_entry->pg_addr);
   free (removed_entry);
 
   lock_release (&page_lock);
