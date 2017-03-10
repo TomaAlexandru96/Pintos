@@ -10,7 +10,7 @@
 
 enum location 
   {
-    SWAP, DISK, NOT_LOADED
+    SWAP, DISK, NOT_LOADED, FRAME
   };
 
 struct page_table_entry

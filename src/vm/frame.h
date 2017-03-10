@@ -7,6 +7,7 @@
 #include "../threads/palloc.h"
 #include "../threads/malloc.h"
 #include "../threads/synch.h"
+#include "page.h"
 
 struct frame_table_entry
   {
