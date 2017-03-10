@@ -39,6 +39,7 @@
 #endif
 #ifdef VM
 #include "vm/frame.h"
+#include "vm/page.h"
 #endif
 
 /* Page directory with kernel mappings only. */
@@ -133,6 +134,8 @@ main (void)
 #ifdef VM
   /* initialize frame table */
   frame_init ();
+  /* inittialize suplemental page table */
+  page_init ();
 #endif
 
   printf ("Boot complete.\n");
