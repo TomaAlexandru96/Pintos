@@ -18,7 +18,9 @@
 #include <list.h>
 #include <inttypes.h>
 
-#define ARGUMENTS_IN_USER_SPACE(intr_frame, param_nr) do {is_pointer_valid (((uint32_t *) intr_frame->esp) + param_nr, intr_frame);} while (0)
+#define ARGUMENTS_IN_USER_SPACE(intr_frame, param_nr) do \
+  {is_pointer_valid (((uint32_t *) intr_frame->esp)      \
+    + param_nr, intr_frame);} while (0)
 #define GET_ARGUMENT(intr_frame, nr) (((uint32_t *) intr_frame->esp)[nr])
 
 /* Process identifier */
@@ -37,6 +39,8 @@ static void syscall_write (struct intr_frame *);
 static void syscall_seek (struct intr_frame *);
 static void syscall_tell (struct intr_frame *);
 static void syscall_close (struct intr_frame *);
+static void syscall_mmap (struct intr_frame *);
+static void syscall_munmap (struct intr_frame *);
 
 static bool remove_fd (int fd);
 static struct file_map *get_filemap (int fd);
@@ -66,6 +70,8 @@ syscall_init (void)
   syscall_map[SYS_SEEK]     = syscall_seek;
   syscall_map[SYS_TELL]     = syscall_tell;
   syscall_map[SYS_CLOSE]    = syscall_close;
+  syscall_map[SYS_MMAP]     = syscall_mmap;
+  syscall_map[SYS_MUNMAP]   = syscall_munmap;
 
   lock_init (&file_lock);
 }
@@ -396,3 +402,38 @@ syscall_close_aux (struct file_map *fm)
       // ERROR
     }
 }
+
+static void 
+syscall_mmap (struct intr_frame *f)
+{
+  ARGUMENTS_IN_USER_SPACE (f, 2);
+  int fd = (int) GET_ARGUMENT (f, 1);
+  void *addr = (void*) GET_ARGUMENT (f, 2);
+  int return_id =  -1;
+  lock_acquire (&file_lock);
+  f->eax = return_id;
+  lock_release (&file_lock);
+}
+
+
+static void 
+syscall_munmap (struct intr_frame *f)
+{
+  ARGUMENTS_IN_USER_SPACE (f, 1);
+  int mapping_id = (int) GET_ARGUMENT (f, 1);
+  
+  syscall_munmap_aux (mapping_id);
+
+}
+
+void
+syscall_munmap_aux (int map_id) 
+{
+
+
+}
+
+
+
+
+
