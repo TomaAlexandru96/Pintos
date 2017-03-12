@@ -410,7 +410,26 @@ syscall_mmap (struct intr_frame *f)
   int fd = (int) GET_ARGUMENT (f, 1);
   void *addr = (void*) GET_ARGUMENT (f, 2);
   int return_id =  -1;
+  struct file_map *m = get_filemap (fd);
+  /*
+    TODO: IF THE RANGES OF PAGES MAPPED OVERLAPS ANY EXISTING SET OF MAPPED
+    PAGES INCLUDING THE STACK R THE PAGES MAPPED AT EXECUTABLE LOAD TIME
+  */
+  if (m == NULL)
+    {
+      // ERROR
+      return;
+    }
   lock_acquire (&file_lock);
+  int file_size = (int) file_length (m->f);
+  if (file_size == 0 || addr == 0 || fd == 0 || fd == 1 || 
+     ((int) addr) % PGSIZE == 0)
+  {
+    f->eax = -1;
+    lock_release (&file_lock);
+    return;
+  }
+
   f->eax = return_id;
   lock_release (&file_lock);
 }
@@ -421,6 +440,7 @@ syscall_munmap (struct intr_frame *f)
 {
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int mapping_id = (int) GET_ARGUMENT (f, 1);
+
   
   syscall_munmap_aux (mapping_id);
 
