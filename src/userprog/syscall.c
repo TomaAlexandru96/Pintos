@@ -411,10 +411,6 @@ syscall_mmap (struct intr_frame *f)
   void *addr = (void*) GET_ARGUMENT (f, 2);
   int return_id =  -1;
   struct file_map *m = get_filemap (fd);
-  /*
-    TODO: IF THE RANGES OF PAGES MAPPED OVERLAPS ANY EXISTING SET OF MAPPED
-    PAGES INCLUDING THE STACK R THE PAGES MAPPED AT EXECUTABLE LOAD TIME
-  */
   if (m == NULL)
     {
       // ERROR
@@ -422,13 +418,30 @@ syscall_mmap (struct intr_frame *f)
     }
   lock_acquire (&file_lock);
   int file_size = (int) file_length (m->f);
-  if (file_size == 0 || addr == 0 || fd == 0 || fd == 1 || 
-     ((int) addr) % PGSIZE == 0)
-  {
-    f->eax = -1;
-    lock_release (&file_lock);
-    return;
-  }
+  if (file_size == 0 || addr == 0 || fd == 0 || fd == 1 || pg_ofs (addr) != 0) 
+    {
+      f->eax = -1;
+      lock_release (&file_lock);
+      return;
+    }
+  int no_pages = file_size / PGSIZE;
+  if (file_size % PGSIZE != 0) 
+    {
+      no_pages++;
+    }
+  for (int i = 0; i < no_pages; i++)
+    {
+      if (page_get_data ((void *) ((int) addr + PGSIZE*i)) != NULL)
+        {
+          f->eax = -1;
+          lock_release (&file_lock);
+          return;
+        }
+    }
+  /*
+    TODO: IF THE RANGES OF PAGES MAPPED OVERLAPS ANY EXISTING SET OF MAPPED
+    PAGES INCLUDING THE STACK R THE PAGES MAPPED AT EXECUTABLE LOAD TIME
+  */
 
   f->eax = return_id;
   lock_release (&file_lock);

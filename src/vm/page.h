@@ -2,11 +2,11 @@
 #define VM_PAGE_H
 
 #include <stdbool.h>
-#include "../threads/thread.h"
-#include "../lib/kernel/hash.h"
-#include "../threads/palloc.h"
-#include "../threads/malloc.h"
-#include "../threads/synch.h"
+#include "threads/thread.h"
+#include "lib/kernel/hash.h"
+#include "threads/palloc.h"
+#include "threads/malloc.h"
+#include "threads/synch.h"
 
 enum location 
   {
