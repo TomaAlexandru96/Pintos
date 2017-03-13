@@ -438,11 +438,15 @@ syscall_mmap (struct intr_frame *f)
           return;
         }
     }
-  /*
-    TODO: IF THE RANGES OF PAGES MAPPED OVERLAPS ANY EXISTING SET OF MAPPED
-    PAGES INCLUDING THE STACK R THE PAGES MAPPED AT EXECUTABLE LOAD TIME
-  */
-
+  for (int i = 0; i < no_pages; i++)
+    {
+      struct page_table_entry *entry = page_insert_data ((void *) ((int) addr +
+                                       PGSIZE*i));
+      entry->l = NOT_LOADED;
+      entry->mapping_index = i;
+      entry->mapping_fd = fd;
+      entry->mapping_size = file_size;
+    }
   f->eax = return_id;
   lock_release (&file_lock);
 }

@@ -38,10 +38,10 @@ page_get_data (void *addr)
   search.pg_addr = addr;
   
   struct hash_elem *el = hash_find (&page_table, &search.hash_elem);
+  lock_release (&page_lock);
+
   if (el == NULL)
     return NULL;
-
-  lock_release (&page_lock);
 
   return hash_entry (el, struct page_table_entry, hash_elem);
 }
@@ -58,6 +58,7 @@ page_insert_data (void *addr)
 
   new_entry->pg_addr = addr;
   new_entry->l = NOT_LOADED;
+  new_entry->mapping_index = -1;
 
   hash_insert (&page_table, &new_entry->hash_elem);
 

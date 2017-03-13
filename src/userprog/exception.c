@@ -6,6 +6,7 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "vm/page.h"
+#include "vm/frame.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -156,14 +157,15 @@ page_fault (struct intr_frame *f)
 
   // check if the access is valid or not
   
-  void *pg = pagedir_get_page (thread_current ()->pagedir, fault_addr);
-
-  if (pg != NULL)
+  struct page_table_entry *pg_data = page_get_data (fault_addr);    
+  if (pg_data != NULL)
     {
-      struct page_table_entry *pg_data = page_get_data (fault_addr);    
-      if (pg_data != NULL)
-        {
-          // don't fault
+      // don't fault
+      if (pg_data->mapping_index != -1)
+        { 
+            struct frame_table_entry *entry = frame_get_page (true);
+            pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr, 
+                                entry->pg_addr, true);
         }
     }
 

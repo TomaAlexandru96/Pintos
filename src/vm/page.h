@@ -18,6 +18,9 @@ struct page_table_entry
     struct hash_elem hash_elem;
     void *pg_addr;
     enum location l;
+    int mapping_index;
+    int mapping_fd;
+    int mapping_size;
   };
 
 void page_init (void);
