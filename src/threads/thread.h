@@ -3,6 +3,7 @@
 
 #include <debug.h>
 #include <list.h>
+#include <hash.h>
 #include <stdint.h>
 #include "threads/synch.h"
 
@@ -129,6 +130,10 @@ struct thread
     bool has_waited;                    /* Parent process called wait */
     bool has_loaded;                    /* If child has loaded succsefully */
     int return_status;                  /* The process exit status */
+#endif
+
+#ifdef VM
+    struct hash page_table;
 #endif
 
     int64_t wake_up_tick;               /* To monitor of sleep_time */

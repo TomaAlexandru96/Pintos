@@ -134,9 +134,9 @@ main (void)
 #ifdef VM
   /* initialize frame table */
   frame_init ();
-  /* inittialize suplemental page table */
   page_init ();
 #endif
+
 
   printf ("Boot complete.\n");
 

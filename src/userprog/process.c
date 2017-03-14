@@ -18,7 +18,10 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#ifdef VM
 #include "vm/frame.h"
+#include "vm/page.h"
+#endif
 #include "syscall.h"
 
 static thread_func start_process NO_RETURN;
@@ -34,6 +37,7 @@ process_execute (const char *file_name)
   /* Make a copy of FILE_NAME.
     Otherwise there's a race between the caller and load(). */
   struct frame_table_entry *ft_fn = frame_get_page (false);
+  page_insert_data (ft_fn->pg_addr);
   char *fn_copy = ft_fn->pg_addr;
   if (fn_copy == NULL)
     return TID_ERROR;
@@ -42,7 +46,10 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid_t tid = thread_create (file_name, PRI_DEFAULT, start_process, ft_fn);
   if (tid == TID_ERROR)
-    frame_remove_page (ft_fn);
+    {
+      frame_remove_page (ft_fn);
+      page_remove_data (ft_fn->pg_addr);
+    }
 
   struct thread *t = get_thread_from_tid (tid);
   list_push_back (&thread_current ()->executing_children, &t->exec_children_elem);
@@ -69,6 +76,7 @@ start_process (void *ft_fn)
   int argc = 0;
   char *token = strtok_r (file_name, delim, &save_ptr);
   struct frame_table_entry *ft_argv = frame_get_page (false);
+  page_insert_data (ft_argv->pg_addr);
   char **argv = ft_argv->pg_addr;
   char *exec_name = token;
 
@@ -141,7 +149,9 @@ start_process (void *ft_fn)
 
   /* If load failed, quit. */
   frame_remove_page (ft_argv);
+  page_remove_data (ft_argv->pg_addr);
   frame_remove_page (ft_fn);
+  page_remove_data (ft_fn->pg_addr);
 
   thread_current ()->has_loaded = true;
 
@@ -557,6 +567,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Get a page of memory. */
       struct frame_table_entry *ft_kpage = frame_get_page (false);
+      page_insert_data (ft_kpage->pg_addr);
       uint8_t *kpage = ft_kpage->pg_addr;
       if (kpage == NULL)
         return false;
@@ -565,6 +576,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           frame_remove_page (ft_kpage);
+          page_remove_data (ft_kpage->pg_addr);
           return false;
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -573,6 +585,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (!install_page (upage, kpage, writable))
         {
           frame_remove_page (ft_kpage);
+          page_remove_data (ft_kpage->pg_addr);
           return false;
         }
 
@@ -593,6 +606,7 @@ setup_stack (void **esp)
   bool success = false;
 
   struct frame_table_entry *ft_kpage = frame_get_page (true);
+  page_insert_data (ft_kpage->pg_addr);
   kpage = ft_kpage->pg_addr;
   if (kpage != NULL)
     {
@@ -600,7 +614,10 @@ setup_stack (void **esp)
       if (success)
         *esp = PHYS_BASE;
       else
-        frame_remove_page (ft_kpage);
+        {
+          frame_remove_page (ft_kpage);
+          page_remove_data (ft_kpage->pg_addr);
+        }
     }
   return success;
 }

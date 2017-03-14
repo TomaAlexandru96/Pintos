@@ -17,6 +17,9 @@
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
 #endif
+#ifdef VM
+#include "vm/page.h"
+#endif
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -258,6 +261,10 @@ thread_create (const char *name, int priority,
   sema_init (&t->sema_wait, 0);
   t->has_waited = false;
   t->parent = thread_current ();
+  #endif
+
+  #ifdef VM
+  hash_init (&t->page_table, &page_hash_func, &page_less_func, NULL);
   #endif
 
   return tid;

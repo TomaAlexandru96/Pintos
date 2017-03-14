@@ -7,8 +7,12 @@
 #include "threads/palloc.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
+#include "threads/thread.h"
 
-enum location 
+hash_hash_func page_hash_func;
+hash_less_func page_less_func;
+
+enum location
   {
     SWAP, DISK, NOT_LOADED, FRAME
   };
