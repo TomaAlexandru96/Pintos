@@ -160,27 +160,38 @@ page_fault (struct intr_frame *f)
           user ? "user" : "kernel");
 
   /* Stack growth. */
-  bool user_access = (f->error_code & PF_U) != 0;
+  void *esp;
   void *upage;
   void *kpage;
   
   /* Check if error code is user program */
   if((f->error_code & PF_U) != 0) 
     {
-      /*  Check if fault address is at expected location caused by PUSH or PUSHA */
-      if(f->esp - 4 == fault_addr || f->esp - 32 == fault_addr)
-        {
-          //Check stack is less than max size?
-          upage = f->esp;
-          //kpage = frame?
-          if(pagedir_set_page(thread_current()->pagedir, upage, kpage, true))
-            {
-              return;
-            }
-        }
+      esp = f->esp;
+    }
+  else
+    {
+      // esp = thread_current()->esp; TODO: implement saving esp in thread when transition from user to kernel mode
     }
 
-  //Must also deal with case where page fault occurs in kernel?
+  /*  Check if fault address is at expected location caused by PUSH or PUSHA */
+  if(f->esp - 4 == fault_addr || f->esp - 32 == fault_addr)
+    {
+     
+      /* Check if adding a page after esp exceeds max stack size. If so we kill and return. */
+      if(((uint32_t *) PHYS_BASE) - ((uint32_t *) esp) + ((uint32_t *) PGSIZE) > MAX_STACK_SIZE)
+        {
+          kill(f);
+          return;
+        }
+
+      upage = f->esp;
+      // kpage = TODO: get address for kpage from frame.c?
+      if(pagedir_set_page(thread_current()->pagedir, upage, kpage, true))
+        {
+          return;
+        }
+    }
 
   kill (f);
 }
