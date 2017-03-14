@@ -34,7 +34,6 @@ page_get_data (void *addr)
 
   struct hash_elem *el = hash_find (&thread_current ()->page_table, &search.hash_elem);
   lock_release (&page_lock);
-
   if (el == NULL)
     return NULL;
 
@@ -45,7 +44,6 @@ struct page_table_entry *
 page_insert_data (void *addr)
 {
   lock_acquire (&page_lock);
-
   struct page_table_entry *new_entry = (struct page_table_entry *)
                                     malloc (sizeof (struct page_table_entry));
   if (new_entry == NULL)

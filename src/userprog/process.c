@@ -37,7 +37,7 @@ process_execute (const char *file_name)
   /* Make a copy of FILE_NAME.
     Otherwise there's a race between the caller and load(). */
   struct frame_table_entry *ft_fn = frame_get_page (false);
-  page_insert_data (ft_fn->pg_addr);
+  //page_insert_data (ft_fn->pg_addr);
   char *fn_copy = ft_fn->pg_addr;
   if (fn_copy == NULL)
     return TID_ERROR;
@@ -151,7 +151,7 @@ start_process (void *ft_fn)
   frame_remove_page (ft_argv);
   page_remove_data (ft_argv->pg_addr);
   frame_remove_page (ft_fn);
-  page_remove_data (ft_fn->pg_addr);
+  //page_remove_data (ft_fn);
 
   thread_current ()->has_loaded = true;
 

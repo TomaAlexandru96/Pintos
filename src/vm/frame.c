@@ -56,7 +56,6 @@ frame_get_page (bool zero_initialized)
 
   h_entry->pg_addr = pg;
   hash_insert (&frame_table, &h_entry->hash_elem);
-  // update suplemental page table
   lock_release (&ft_lock);
 
   return h_entry;
@@ -75,7 +74,6 @@ frame_remove_page (struct frame_table_entry *h_entry)
 
   struct frame_table_entry *removed_entry = hash_entry (el,
                                   struct frame_table_entry, hash_elem);
-  page_remove_data (removed_entry->pg_addr);
   palloc_free_page (removed_entry->pg_addr);
   free (removed_entry);
   lock_release (&ft_lock);
