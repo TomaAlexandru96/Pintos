@@ -174,5 +174,29 @@ page_fault (struct intr_frame *f)
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
           user ? "user" : "kernel");
+
+  /* Stack growth. */
+  bool user_access = (f->error_code & PF_U) != 0;
+  void *upage;
+  void *kpage;
+  
+  /* Check if error code is user program */
+  if((f->error_code & PF_U) != 0) 
+    {
+      /*  Check if fault address is at expected location caused by PUSH or PUSHA */
+      if(f->esp - 4 == fault_addr || f->esp - 32 == fault_addr)
+        {
+          //Check stack is less than max size?
+          upage = f->esp;
+          //kpage = frame?
+          if(pagedir_set_page(thread_current()->pagedir, upage, kpage, true))
+            {
+              return;
+            }
+        }
+    }
+
+  //Must also deal with case where page fault occurs in kernel?
+
   kill (f);
 }
