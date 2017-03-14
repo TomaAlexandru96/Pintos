@@ -409,7 +409,7 @@ syscall_mmap (struct intr_frame *f)
   ARGUMENTS_IN_USER_SPACE (f, 2);
   int fd = (int) GET_ARGUMENT (f, 1);
   void *addr = (void*) GET_ARGUMENT (f, 2);
-  int return_id =  -1;
+  int return_id = -1;
   struct file_map *m = get_filemap (fd);
   if (m == NULL)
     {

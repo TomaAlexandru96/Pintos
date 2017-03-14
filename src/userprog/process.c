@@ -148,9 +148,9 @@ start_process (void *ft_fn)
   file_deny_write (thread_current ()->deny_file);
 
   /* If load failed, quit. */
-  frame_remove_page (ft_argv);
-  page_remove_data (ft_argv->pg_addr);
-  frame_remove_page (ft_fn);
+  //frame_remove_page (ft_argv);
+  //page_remove_data (ft_argv->pg_addr);
+  //frame_remove_page (ft_fn);
   //page_remove_data (ft_fn);
 
   thread_current ()->has_loaded = true;
