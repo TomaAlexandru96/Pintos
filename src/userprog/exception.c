@@ -5,6 +5,7 @@
 #include "userprog/pagedir.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 #include "vm/page.h"
 #include "vm/frame.h"
 
@@ -169,45 +170,39 @@ page_fault (struct intr_frame *f)
     }
 
   thread_current ()->return_status = -1;
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
 
   /* Stack growth. */
   void *esp;
-  void *upage;
   void *kpage;
   
   /* Check if error code is user program */
-  if((f->error_code & PF_U) != 0) 
+  if(user) 
     {
       esp = f->esp;
     }
   else
     {
-      // esp = thread_current()->esp; TODO: implement saving esp in thread when transition from user to kernel mode
+      esp = (uint32_t *) thread_current()->esp;
     }
 
   /*  Check if fault address is at expected location caused by PUSH or PUSHA */
-  if(f->esp - 4 == fault_addr || f->esp - 32 == fault_addr)
+  if(esp - 4 == fault_addr || esp - 32 == fault_addr)
     {
-     
+
       /* Check if adding a page after esp exceeds max stack size. If so we kill and return. */
-      if(((uint32_t *) PHYS_BASE) - ((uint32_t *) esp) + ((uint32_t *) PGSIZE) > MAX_STACK_SIZE)
+      if(((uint32_t *) PHYS_BASE) - ((uint32_t *) fault_addr) > MAX_STACK_SIZE)
         {
           kill(f);
           return;
         }
-
-      upage = f->esp;
-      // kpage = TODO: get address for kpage from frame.c?
-      if(pagedir_set_page(thread_current()->pagedir, upage, kpage, true))
+      
+      kpage = frame_get_page(false);
+      printf("=============================================================================================================== %d", pg_ofs(esp));
+      if(pagedir_set_page(thread_current ()->pagedir, (((uint32_t) esp) + ((uint32_t) PGSIZE) - pg_ofs(esp)), kpage, true))
         {
           return;
         }
-    }
+    } 
 
   kill (f);
 }

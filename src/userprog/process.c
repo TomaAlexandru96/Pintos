@@ -142,6 +142,9 @@ start_process (void *ft_fn)
   if_.esp = (void *) (((uint32_t *) if_.esp) - 1);
   *((uint32_t *) if_.esp) = 0;
 
+  /* Record esp to be used for stack growth */
+  thread_current ()->esp = if_.esp;
+
   // deny write as long as it is running
   thread_current ()->deny_file = filesys_open (exec_name);
   file_deny_write (thread_current ()->deny_file);

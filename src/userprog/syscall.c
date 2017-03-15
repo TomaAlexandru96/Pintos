@@ -125,6 +125,7 @@ remove_fd (int fd)
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
+  thread_current ()->esp = (uint32_t) f->esp;
   is_pointer_valid (f->esp, f);
   syscall_map[* (uint32_t *) f->esp](f);
 }
