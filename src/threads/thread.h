@@ -161,6 +161,9 @@ struct file_map
     struct list_elem elem;
   };
 
+/* Initial thread, the thread running init.c:main(). */
+struct thread *initial_thread;
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */

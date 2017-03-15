@@ -2,11 +2,12 @@
 #define VM_FRAME_H
 
 #include <stdbool.h>
-#include "../threads/thread.h"
-#include "../lib/kernel/hash.h"
-#include "../threads/palloc.h"
-#include "../threads/malloc.h"
-#include "../threads/synch.h"
+#include "threads/thread.h"
+#include "lib/kernel/hash.h"
+#include "threads/palloc.h"
+#include "threads/malloc.h"
+#include "threads/synch.h"
+#include "page.h"
 
 struct frame_table_entry
   {
@@ -16,6 +17,8 @@ struct frame_table_entry
 
 void frame_init (void);
 struct frame_table_entry *frame_get_page (bool);
+void frame_put_page ();
 void frame_remove_page (struct frame_table_entry *);
+void frame_evict_page (struct frame_table_entry *);
 
 #endif /* vm/frame.h */

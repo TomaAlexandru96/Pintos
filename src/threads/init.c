@@ -132,11 +132,11 @@ main (void)
 #endif
 
 #ifdef VM
+  hash_init (&initial_thread->page_table, &page_hash_func, &page_less_func, NULL);
   /* initialize frame table */
   frame_init ();
   page_init ();
 #endif
-
 
   printf ("Boot complete.\n");
 

@@ -156,15 +156,14 @@ page_fault (struct intr_frame *f)
      which fault_addr refers. */
 
   // check if the access is valid or not
-  
-  struct page_table_entry *pg_data = page_get_data (fault_addr);    
+  struct page_table_entry *pg_data = page_get_data (fault_addr);
   if (pg_data != NULL)
     {
       // don't fault
       if (pg_data->mapping_index != -1)
-        { 
+        {
             struct frame_table_entry *entry = frame_get_page (true);
-            pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr, 
+            pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
                                 entry->pg_addr, true);
         }
     }

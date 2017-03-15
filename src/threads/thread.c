@@ -37,9 +37,6 @@ static struct list all_list;
 /* Idle thread. */
 static struct thread *idle_thread;
 
-/* Initial thread, the thread running init.c:main(). */
-static struct thread *initial_thread;
-
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
@@ -112,9 +109,12 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  #ifdef USERPROG
   list_init (&initial_thread->executing_children);
   list_init (&initial_thread->finished_children);
   sema_init (&initial_thread->sema_wait, 0);
+  #endif
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -242,16 +242,6 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  intr_set_level (old_level);
-
-  /* Add to run queue. */
-  thread_unblock (t);
-
-  if (t->priority > thread_current ()->priority)
-    {
-      thread_yield ();
-    }
-
   #ifdef USERPROG
   t->last_fd = 2;
   list_init (&t->open_files);
@@ -266,6 +256,16 @@ thread_create (const char *name, int priority,
   #ifdef VM
   hash_init (&t->page_table, &page_hash_func, &page_less_func, NULL);
   #endif
+
+  intr_set_level (old_level);
+
+  /* Add to run queue. */
+  thread_unblock (t);
+
+  if (t->priority > thread_current ()->priority)
+    {
+      thread_yield ();
+    }
 
   return tid;
 }

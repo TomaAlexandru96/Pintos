@@ -42,6 +42,10 @@ frame_get_page (bool zero_initialized)
   lock_acquire (&ft_lock);
   void *pg = palloc_get_page (PAL_USER | zero_initialized ? PAL_ZERO : 0);
 
+  // update suplemental page table
+  struct page_table_entry *en = page_insert_data (pg);
+  en->l = FRAME;
+
   if (pg == NULL)
     {
       PANIC("TODO");
@@ -74,6 +78,7 @@ frame_remove_page (struct frame_table_entry *h_entry)
 
   struct frame_table_entry *removed_entry = hash_entry (el,
                                   struct frame_table_entry, hash_elem);
+  page_remove_data (removed_entry->pg_addr);
   palloc_free_page (removed_entry->pg_addr);
   free (removed_entry);
   lock_release (&ft_lock);
