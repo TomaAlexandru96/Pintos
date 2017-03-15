@@ -403,7 +403,7 @@ syscall_close_aux (struct file_map *fm)
     }
 }
 
-static void 
+static void
 syscall_mmap (struct intr_frame *f)
 {
   ARGUMENTS_IN_USER_SPACE (f, 2);
@@ -418,14 +418,14 @@ syscall_mmap (struct intr_frame *f)
     }
   lock_acquire (&file_lock);
   int file_size = (int) file_length (m->f);
-  if (file_size == 0 || addr == 0 || fd == 0 || fd == 1 || pg_ofs (addr) != 0) 
+  if (file_size == 0 || addr == 0 || fd == 0 || fd == 1 || pg_ofs (addr) != 0)
     {
       f->eax = -1;
       lock_release (&file_lock);
       return;
     }
   int no_pages = file_size / PGSIZE;
-  if (file_size % PGSIZE != 0) 
+  if (file_size % PGSIZE != 0)
     {
       no_pages++;
     }
@@ -452,25 +452,20 @@ syscall_mmap (struct intr_frame *f)
 }
 
 
-static void 
+static void
 syscall_munmap (struct intr_frame *f)
 {
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int mapping_id = (int) GET_ARGUMENT (f, 1);
 
-  
+
   syscall_munmap_aux (mapping_id);
 
 }
 
 void
-syscall_munmap_aux (int map_id) 
+syscall_munmap_aux (int map_id)
 {
 
 
 }
-
-
-
-
-
