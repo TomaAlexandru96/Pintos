@@ -403,13 +403,12 @@ syscall_close_aux (struct file_map *fm)
     }
 }
 
-static void 
+static void
 syscall_mmap (struct intr_frame *f)
 {
   ARGUMENTS_IN_USER_SPACE (f, 2);
   int fd = (int) GET_ARGUMENT (f, 1);
   void *addr = (void*) GET_ARGUMENT (f, 2);
-  int return_id = -1;
   struct file_map *m = get_filemap (fd);
   if (m == NULL)
     {
@@ -418,14 +417,14 @@ syscall_mmap (struct intr_frame *f)
     }
   lock_acquire (&file_lock);
   int file_size = (int) file_length (m->f);
-  if (file_size == 0 || addr == 0 || fd == 0 || fd == 1 || pg_ofs (addr) != 0) 
+  if (file_size == 0 || addr == 0 || fd == 0 || fd == 1 || pg_ofs (addr) != 0)
     {
       f->eax = -1;
       lock_release (&file_lock);
       return;
     }
   int no_pages = file_size / PGSIZE;
-  if (file_size % PGSIZE != 0) 
+  if (file_size % PGSIZE != 0)
     {
       no_pages++;
     }
@@ -438,39 +437,36 @@ syscall_mmap (struct intr_frame *f)
           return;
         }
     }
+
   for (int i = 0; i < no_pages; i++)
     {
       struct page_table_entry *entry = page_insert_data ((void *) ((int) addr +
                                        PGSIZE*i));
-      entry->l = NOT_LOADED;
+      entry->l = FILE_SYS;
       entry->mapping_index = i;
-      entry->mapping_fd = fd;
-      entry->mapping_size = file_size;
+      entry->f = m->f;
+      entry->map_id = thread_current ()-> last_vm_file_map;
     }
-  f->eax = return_id;
+  f->eax = thread_current ()-> last_vm_file_map;
+  thread_current ()-> last_vm_file_map++;
   lock_release (&file_lock);
 }
 
 
-static void 
+static void
 syscall_munmap (struct intr_frame *f)
 {
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int mapping_id = (int) GET_ARGUMENT (f, 1);
 
-  
+
   syscall_munmap_aux (mapping_id);
 
 }
 
 void
-syscall_munmap_aux (int map_id) 
+syscall_munmap_aux (int map_id)
 {
 
 
 }
-
-
-
-
-

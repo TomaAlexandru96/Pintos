@@ -1,10 +1,12 @@
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include "filesys/file.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 #include "vm/page.h"
 #include "vm/frame.h"
 
@@ -160,11 +162,16 @@ page_fault (struct intr_frame *f)
   if (pg_data != NULL)
     {
       // don't fault
-      if (pg_data->mapping_index != -1)
+      if (pg_data->l == FILE_SYS)
         {
-            struct frame_table_entry *entry = frame_get_page (true);
-            pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
-                                entry->pg_addr, true);
+          ASSERT (pg_data->f != NULL);
+
+          struct frame_table_entry *entry = frame_get_page (true);
+          pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
+                              entry->pg_addr, true);
+          file_seek (pg_data->f, pg_data->mapping_index * PGSIZE);
+          file_read (pg_data->f, pg_data->pg_addr, PGSIZE);
+          return;
         }
     }
 
