@@ -5,7 +5,7 @@ static struct block *swap_block;
 static struct bitmap *slots_map;
 static struct hash swap_table;
 #define SWAP_SIZE(swap_block) ((uint32_t) block_size ((struct block *) swap_block))
-
+#define SLOT_SIZE (SWAP_SIZE (swap_block) / PGSIZE)
 
 void
 swap_init(void)
@@ -35,15 +35,21 @@ swap_less_func (const struct hash_elem *a,
   return a_el < b_el;
 }
 
+
+bool
+is_swap_full (void)
+{
+  return bitmap_all (slots_map, 0, SLOT_SIZE);
+}
+
 static int
 get_free_slot (void)
 {
-  int slot_size = SWAP_SIZE (swap_block) / PGSIZE;
-  bool swap_full = bitmap_all (slots_map, 0, slot_size);
+  bool swap_full = is_swap_full ();
   int start = 0;
   if (!swap_full)
     {
-      start = (int) bitmap_scan_and_flip (slots_map, start, slot_size, false);
+      start = (int) bitmap_scan_and_flip (slots_map, start, SLOT_SIZE, false);
     }
   else
     {

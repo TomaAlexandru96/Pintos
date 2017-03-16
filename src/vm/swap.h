@@ -18,6 +18,7 @@
 hash_hash_func swap_hash_func;
 hash_less_func swap_less_func;
 static int get_free_slot (void);
+bool is_swap_full (void);
 
 struct swap_table_entry
 {

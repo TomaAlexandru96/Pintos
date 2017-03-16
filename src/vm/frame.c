@@ -57,6 +57,25 @@ frame_put_page (bool zero_initialized)
   return h_entry;
 }
 
+/* For now the alforithm is based on random selection of frames */
+void *
+evict_frame_algo (void)
+{
+  int frame_table_size = (int) hash_size (&frame_table);
+  uint32_t rand_idx = (uint32_t) (random_ulong () % frame_table_size) + 1;
+  struct hash_iterator *itr;
+  hash_first (&itr, &frame_table);
+  struct hash_elem *curr =  hash_cur (&itr);
+  //NEED to check this !!!
+  for (int i = 0; i < rand_idx; i++)
+    {
+      curr = hash_next (itr);
+    }
+  struct page_table_entry *pt_entry =
+            hash_entry (hash_cur (&itr), struct page_table_entry, hash_elem);
+  return pt_entry->pg_addr;
+}
+
 void
 frame_evict_page (void *addr)
 {
@@ -64,9 +83,7 @@ frame_evict_page (void *addr)
   struct frame_table_entry h_entry;
   h_entry.pg_addr = addr;
   struct hash_elem *el = hash_delete (&frame_table, &h_entry.hash_elem);
-
   ASSERT (el != NULL);
-
   struct frame_table_entry *removed_entry = hash_entry (el,
                                   struct frame_table_entry, hash_elem);
   palloc_free_page (addr);
