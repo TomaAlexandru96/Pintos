@@ -74,23 +74,23 @@ struct block_sector_t *
 reclaim_swap_slot (void *pg_addr)
 {
   lock_acquire (&swap_lock);
-
-  struct swap_table_entry search;
-  search->addr = pg_addr;
-
- 
-
-
-  struct hash_elem *elem = hash_find (&swap_table, &search->hash_elem);
-  if (elem == NULL)
-    {
-      return NULL
-    }
-
-  for (int i = 0; i < SWAP_SLOT_SIZE; i++)
-    {
-      bitmap_scan_and_flip (&swap_table, 0, SWAP_SLOT_SIZE, false);
-    }
+  //
+  // struct swap_table_entry search;
+  // search->addr = pg_addr;
+  //
+  //
+  //
+  //
+  // struct hash_elem *elem = hash_find (&swap_table, &search->hash_elem);
+  // if (elem == NULL)
+  //   {
+  //     return NULL
+  //   }
+  // 
+  // for (int i = 0; i < SWAP_SLOT_SIZE; i++)
+  //   {
+  //     bitmap_scan_and_flip (&swap_table, 0, SWAP_SLOT_SIZE, false);
+  //   }
 
   lock_release (&swap_lock);
   return NULL;
