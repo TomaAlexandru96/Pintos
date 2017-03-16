@@ -459,14 +459,31 @@ syscall_munmap (struct intr_frame *f)
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int mapping_id = (int) GET_ARGUMENT (f, 1);
 
-
   syscall_munmap_aux (mapping_id);
-
 }
 
 void
 syscall_munmap_aux (int map_id)
 {
+  void *removed_mapps[hash_size (&thread_current ()->page_table)];
+  struct hash_iterator it;
+  int index = 0;
 
+  hash_first (&it, &thread_current ()->page_table);
+  while (hash_next (&it))
+    {
+      struct page_table_entry *pt_entry =
+              hash_entry (hash_cur (&it), struct page_table_entry, hash_elem);
 
+      if (pt_entry->f != NULL && pt_entry->map_id == map_id)
+        {
+          removed_mapps[index] = pt_entry->pg_addr;
+          index++;
+        }
+    }
+
+  for (int i = 0; i < index; i++)
+    {
+      page_remove_data (removed_mapps[i]);
+    }
 }

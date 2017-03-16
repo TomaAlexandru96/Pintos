@@ -166,9 +166,9 @@ page_fault (struct intr_frame *f)
         {
           ASSERT (pg_data->f != NULL);
 
-          struct frame_table_entry *entry = frame_get_page (true);
+          struct frame_table_entry *ft_page = frame_put_page (true);
           pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
-                              entry->pg_addr, true);
+                              ft_page->pg_addr, true);
           file_seek (pg_data->f, pg_data->mapping_index * PGSIZE);
           file_read (pg_data->f, pg_data->pg_addr, PGSIZE);
           return;

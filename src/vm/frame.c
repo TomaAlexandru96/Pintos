@@ -33,20 +33,13 @@ frame_less_func (const struct hash_elem *a,
   return a_el < b_el;
 }
 
-/*
-  Returns the page and maps it to the frame slot
-*/
 struct frame_table_entry *
-frame_get_page (bool zero_initialized)
+frame_put_page (bool zero_initialized)
 {
   lock_acquire (&ft_lock);
-  void *pg = palloc_get_page (PAL_USER | zero_initialized ? PAL_ZERO : 0);
+  void *addr = palloc_get_page (PAL_USER | zero_initialized ? PAL_ZERO : 0);
 
-  // update suplemental page table
-  struct page_table_entry *en = page_insert_data (pg);
-  en->l = FRAME;
-
-  if (pg == NULL)
+  if (addr == NULL)
     {
       PANIC("TODO");
     }
@@ -57,29 +50,26 @@ frame_get_page (bool zero_initialized)
     {
       PANIC("malloc failed at frame_get_page");
     }
-
-  h_entry->pg_addr = pg;
+  h_entry->pg_addr = addr;
   hash_insert (&frame_table, &h_entry->hash_elem);
   lock_release (&ft_lock);
 
   return h_entry;
 }
 
-/*
-  Removes the page from the frame slot
-*/
 void
-frame_remove_page (struct frame_table_entry *h_entry)
+frame_evict_page (void *addr)
 {
   lock_acquire (&ft_lock);
-  struct hash_elem *el = hash_delete (&frame_table, &h_entry->hash_elem);
+  struct frame_table_entry h_entry;
+  h_entry.pg_addr = addr;
+  struct hash_elem *el = hash_delete (&frame_table, &h_entry.hash_elem);
 
   ASSERT (el != NULL);
 
   struct frame_table_entry *removed_entry = hash_entry (el,
                                   struct frame_table_entry, hash_elem);
-  page_remove_data (removed_entry->pg_addr);
-  palloc_free_page (removed_entry->pg_addr);
+  palloc_free_page (addr);
   free (removed_entry);
   lock_release (&ft_lock);
 }
