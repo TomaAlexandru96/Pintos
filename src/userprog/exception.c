@@ -173,6 +173,7 @@ page_fault (struct intr_frame *f)
 
   /* Stack growth. */
   void *esp;
+  void *upage;
   void *kpage;
   
   /* Check if error code is user program */
@@ -196,9 +197,10 @@ page_fault (struct intr_frame *f)
           return;
         }
       
-      kpage = frame_get_page(false);
-      printf("=============================================================================================================== %d", pg_ofs(esp));
-      if(pagedir_set_page(thread_current ()->pagedir, (((uint32_t) esp) + ((uint32_t) PGSIZE) - pg_ofs(esp)), kpage, true))
+      upage = ((uint32_t) esp) + ((uint32_t) PGSIZE) - pg_ofs(esp); // Is aligned but (*pte & PTE_P) == 0 failing.
+      kpage = frame_get_page(false)->pg_addr;
+      printf("========================================================================================================");
+      if(pagedir_set_page(thread_current ()->pagedir, upage, kpage, true))
         {
           return;
         }
