@@ -119,6 +119,8 @@ kill (struct intr_frame *f)
     }
 }
 
+bool is_stack_access (void *esp, void *addr);
+
 /* Page fault handler.  This is a skeleton that must be filled in
    to implement virtual memory.  Some solutions to task 2 may
    also require modifying this code.
@@ -193,44 +195,27 @@ page_fault (struct intr_frame *f)
       return;
     }
 
-  lock_release (&handler_lock);
-
-  thread_current ()->return_status = -1;
-
-  /* Stack growth. */
-  void *esp;
-  void *upage;
-  void *kpage;
-  
-  /* Check if error code is user program */
-  if(user) 
-    {
-      esp = f->esp;
-    }
-  else
-    {
-      esp = (uint32_t *) thread_current()->esp;
-    }
-
   /*  Check if fault address is at expected location caused by PUSH or PUSHA */
-  if(esp - 4 == fault_addr || esp - 32 == fault_addr)
+  if(is_stack_access (f->esp, fault_addr))
     {
+      void *upage = pg_round_down (fault_addr);
+      void *kpage = frame_put_page (true)->pg_addr;
 
-      /* Check if adding a page after esp exceeds max stack size. If so we kill and return. */
-      if(((uint32_t *) PHYS_BASE) - ((uint32_t *) fault_addr) > MAX_STACK_SIZE)
-        {
-          kill(f);
-          return;
-        }
-      
-      upage = ((uint32_t) esp) + ((uint32_t) PGSIZE) - pg_ofs(esp); // Is aligned but (*pte & PTE_P) == 0 failing.
-      kpage = frame_get_page(false)->pg_addr;
-      printf("========================================================================================================");
-      if(pagedir_set_page(thread_current ()->pagedir, upage, kpage, true))
-        {
-          return;
-        }
+      pagedir_set_page (thread_current ()->pagedir, upage, kpage, true);
+      page_insert_data(upage)->l = FRAME;
+
+      lock_release (&handler_lock);
+      return;
     } 
 
+  lock_release (&handler_lock);
+  thread_current ()->return_status = -1;
   kill (f);
+}
+
+bool
+is_stack_access (void *esp, void *addr)
+{
+  return addr > 0 && addr >= (esp - 32) &&
+          (PHYS_BASE - pg_round_down (addr)) <= (1 << 23);
 }

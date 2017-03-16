@@ -89,8 +89,7 @@ is_pointer_valid (const void *param, struct intr_frame *f UNUSED)
           barrier ();
         }
     }
-  if (!is_user_vaddr (param) || (pagedir_get_page (thread_current ()->pagedir,
-                                                  param) == NULL))
+  if (!is_user_vaddr (param) || pagedir_get_page (thread_current ()->pagedir, param) == NULL)
     {
       lock_release (&file_lock);
       syscall_exit_aux (f, -1);
@@ -137,7 +136,6 @@ remove_fd (int fd)
 static void
 syscall_handler (struct intr_frame *f UNUSED)
 {
-  thread_current ()->esp = (uint32_t) f->esp;
   is_pointer_valid (f->esp, f);
   syscall_map[* (uint32_t *) f->esp](f);
 }
