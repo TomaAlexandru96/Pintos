@@ -1,6 +1,7 @@
 #include <syscall-nr.h>
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "threads/interrupt.h"
 #include "userprog/process.h"
@@ -79,11 +80,21 @@ syscall_init (void)
 static void
 is_pointer_valid (const void *param, struct intr_frame *f UNUSED)
 {
-  if (!is_user_vaddr (param) || (pagedir_get_page (thread_current ()->pagedir,
-                                                  param) == NULL))
+  lock_acquire (&file_lock);
+  if (page_get_data (pg_round_down (param)) != NULL)
     {
+      int i = * (int *) param;
+      if (i == 0)
+        {
+          barrier ();
+        }
+    }
+  if (!is_user_vaddr (param) || pagedir_get_page (thread_current ()->pagedir, param) == NULL)
+    {
+      lock_release (&file_lock);
       syscall_exit_aux (f, -1);
     }
+  lock_release (&file_lock);
 }
 
 static struct file_map *
@@ -213,9 +224,10 @@ syscall_write (struct intr_frame *f UNUSED)
   is_pointer_valid (buffer, f);
   is_pointer_valid (buffer + length - 1, f);
 
+  lock_acquire (&file_lock);
+
   uint32_t size_written = 0;
 
-  lock_acquire (&file_lock);
   if (fd == STDOUT_FILENO)
     {
       size_written = length;
@@ -408,12 +420,11 @@ syscall_mmap (struct intr_frame *f)
 {
   ARGUMENTS_IN_USER_SPACE (f, 2);
   int fd = (int) GET_ARGUMENT (f, 1);
-  void *addr = (void*) GET_ARGUMENT (f, 2);
-  int return_id = -1;
+  void *addr = (void *) GET_ARGUMENT (f, 2);
   struct file_map *m = get_filemap (fd);
   if (m == NULL)
     {
-      // ERROR
+      f->eax = -1;
       return;
     }
   lock_acquire (&file_lock);
@@ -438,16 +449,18 @@ syscall_mmap (struct intr_frame *f)
           return;
         }
     }
+
   for (int i = 0; i < no_pages; i++)
     {
       struct page_table_entry *entry = page_insert_data ((void *) ((int) addr +
                                        PGSIZE*i));
-      entry->l = NOT_LOADED;
+      entry->l = FILE_SYS;
       entry->mapping_index = i;
-      entry->mapping_fd = fd;
-      entry->mapping_size = file_size;
+      entry->f = m->f;
+      entry->map_id = thread_current ()-> last_vm_file_map;
     }
-  f->eax = return_id;
+  f->eax = thread_current ()-> last_vm_file_map;
+  thread_current ()-> last_vm_file_map++;
   lock_release (&file_lock);
 }
 
@@ -457,15 +470,42 @@ syscall_munmap (struct intr_frame *f)
 {
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int mapping_id = (int) GET_ARGUMENT (f, 1);
-
-
   syscall_munmap_aux (mapping_id);
-
 }
 
 void
 syscall_munmap_aux (int map_id)
 {
+  lock_acquire (&file_lock);
+  struct page_table_entry *removed_mapps[hash_size (&thread_current ()->page_table)];
+  struct hash_iterator it;
+  int index = 0;
 
+  hash_first (&it, &thread_current ()->page_table);
+  while (hash_next (&it))
+    {
+      struct page_table_entry *pt_entry =
+              hash_entry (hash_cur (&it), struct page_table_entry, hash_elem);
 
+      if (pt_entry->f != NULL && pt_entry->map_id == map_id)
+        {
+          removed_mapps[index] = pt_entry;
+          index++;
+        }
+    }
+
+  for (int i = 0; i < index; i++)
+    {
+      if (pagedir_is_dirty (thread_current ()->pagedir, removed_mapps[i]->pg_addr))
+        {
+          off_t file_size = file_length (removed_mapps[i]->f);
+          file_write_at (removed_mapps[i]->f, removed_mapps[i]->pg_addr,
+                        file_size / PGSIZE >= removed_mapps[i]->mapping_index
+                            ? PGSIZE
+                            : file_size % removed_mapps[i]->mapping_index,
+                        removed_mapps[i]->mapping_index * PGSIZE);
+        }
+      page_remove_data (removed_mapps[i]->pg_addr);
+    }
+  lock_release (&file_lock);
 }

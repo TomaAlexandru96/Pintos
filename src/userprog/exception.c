@@ -1,15 +1,21 @@
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include <string.h>
+#include "filesys/file.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
+#include "threads/synch.h"
+#include "threads/vaddr.h"
 #include "vm/page.h"
 #include "vm/frame.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
+static struct lock handler_lock;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
@@ -61,6 +67,8 @@ exception_init (void)
      We need to disable interrupts for page faults because the
      fault address is stored in CR2 and needs to be preserved. */
   intr_register_int (14, 0, INTR_OFF, page_fault, "#PF Page-Fault Exception");
+
+  lock_init (&handler_lock);
 }
 
 /* Prints exception statistics. */
@@ -111,6 +119,8 @@ kill (struct intr_frame *f)
     }
 }
 
+bool is_stack_access (void *esp, void *addr);
+
 /* Page fault handler.  This is a skeleton that must be filled in
    to implement virtual memory.  Some solutions to task 2 may
    also require modifying this code.
@@ -155,24 +165,55 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
+  lock_acquire (&handler_lock);
   // check if the access is valid or not
-  struct page_table_entry *pg_data = page_get_data (fault_addr);
+  struct page_table_entry *pg_data = page_get_data (pg_round_down (fault_addr));
   if (pg_data != NULL)
     {
       // don't fault
-      if (pg_data->mapping_index != -1)
+      if (pg_data->l == FILE_SYS)
         {
-            struct frame_table_entry *entry = frame_get_page (true);
-            pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
-                                entry->pg_addr, true);
+          ASSERT (pg_data->f != NULL);
+
+          struct frame_table_entry *ft_page = frame_put_page (true);
+          pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
+                              ft_page->pg_addr, true);
+          file_read_at (pg_data->f, ft_page->pg_addr, PGSIZE, pg_data->mapping_index * PGSIZE);
         }
+      else if (pg_data->l == NOT_LOADED)
+        {
+          ASSERT (pg_data->f != NULL);
+          struct frame_table_entry *ft_page = frame_put_page (false);
+          file_read_at (pg_data->f, ft_page->pg_addr, pg_data->load_size, pg_data->load_offs);
+          pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
+                              ft_page->pg_addr, true);
+        }
+      pg_data->l = FRAME;
+      lock_release (&handler_lock);
+      return;
     }
 
+  /*  Check if fault address is at expected location caused by PUSH or PUSHA */
+  if(is_stack_access (f->esp, fault_addr))
+    {
+      void *upage = pg_round_down (fault_addr);
+      void *kpage = frame_put_page (true)->pg_addr;
+
+      pagedir_set_page (thread_current ()->pagedir, upage, kpage, true);
+      page_insert_data(upage)->l = FRAME;
+
+      lock_release (&handler_lock);
+      return;
+    }
+
+  lock_release (&handler_lock);
   thread_current ()->return_status = -1;
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
   kill (f);
+}
+
+bool
+is_stack_access (void *esp, void *addr)
+{
+  return (uint32_t) addr > 0 && addr >= (esp - 32) &&
+          (PHYS_BASE - pg_round_down (addr)) <= (1 << 23);
 }
