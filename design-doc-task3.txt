@@ -1,0 +1,246 @@
+            +--------------------------+
+            |          OS 211          |
+            |  TASK 3: VIRTUAL MEMORY  |
+            |      DESIGN DOCUMENT     |
+            +--------------------------+
+
+---- GROUP ----
+
+>> Fill in the names and email addresses of your group members.
+
+Rishiraj Bheenick    <rnb14@imperial.ac.uk>
+Toma Alexandru       <ait15@imperial.ac.uk>
+Mihai Vanea          <mv1315@imperial.ac.uk>
+Arthur Mihai Niculae <an3315@imperial.ac.uk>
+Fraser Price         <fp914@imperial.ac.uk>
+
+---- PRELIMINARIES ----
+
+>> If you have any preliminary comments on your submission, or notes for the
+>> markers, please give them here.
+
+No.
+>> Please cite any offline or online sources you consulted while
+>> preparing your submission, other than the Pintos documentation, course
+>> text, lecture notes, and course staff.
+None.
+
+            PAGE TABLE MANAGEMENT
+            =====================
+
+---- DATA STRUCTURES ----
+
+>> A1: (5 marks)
+>> Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration that relates to your supplemental page table.  
+>> Identify the purpose of each in 25 words or less.
+
+struct thread 
+  {
+#ifdef VM
+    struct hash page_table;
+#endif
+  }
+For each thread (a.k.a. process) you need to keep track of its own page table.
+
+enum location
+  {
+    SWAP, DISK, NOT_LOADED, FRAME
+  };
+It helps to retrieve the location of the page table. 
+
+struct page_table_entry
+  {
+    struct hash_elem hash_elem;
+    void *pg_addr;
+    enum location l;
+    int mapping_index;
+    int mapping_fd;
+    int mapping_size;
+  };
+This struct simulates the the supplemental page table explained in the spec.
+It holds the necessary data for a page.  
+
+
+---- ALGORITHMS ----
+
+>> A2: (5 marks) 
+>> Describe your code for locating the frame, if any, that contains 
+>> the data of a given page.fr
+
+// TODO 
+>> A3: (5 marks)
+>> How does your code coordinate accessed and dirty bits between
+>> kernel and user virtual addresses that alias a single frame?
+>> Your answer should include a discussion of how you have implemented
+>> sharing of read only pages.
+
+As the spec mentions, “every virtual page is aliased to its kernel
+virtual page”.
+
+// TODO
+---- SYNCHRONIZATION ----
+
+>> A4: (5 marks) 
+>> When two user processes both need a new frame at the same time,
+>> how are races avoided? You should consider both when there are
+>> and are not free frames available in memory.
+
+When two processes try to access the same frame at the same time 
+(Either by a retrieval or removal of a page) we acquire the lock of 
+the frame table (defined as a static variable at the top of frame.c) 
+right from the beginning and we release it at the end of the function
+call. 
+In the function where we return the page and map it to the frame
+slot (frame_get_page), we first initialise the lock, we obtain
+a single free page (from the user pool) and return it to kernel 
+virtual address and we insert this new page in the current thread’s
+page table and we set the location of this page to be the frame. 
+We allocate memory for the frame. If we have space and the
+allocation doesn’t fail then we insert it into the frame table. 
+In the case where we don’t have enough space for a frame, we have 2 choices:
+- If we can’t evict a page and swap is full, then we panic the kernel
+- If we can’t evict a page and swap is not full, then we use the swap
+space for creating the frame.  
+
+---- RATIONALE ----
+
+>> A5: (5 marks)
+>> Why did you choose the data structure(s) that you did for
+>> representing virtual-to-physical mappings?
+
+// TODO
+
+               PAGING TO AND FROM DISK
+               =======================
+
+---- DATA STRUCTURES ----
+
+>> B1: (5 marks)
+>> Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration that relates to your frame table and swap table.  
+>> Identify the purpose of each in 25 words or less.
+
+struct frame_table_entry
+  {
+    struct hash_elem hash_elem;
+    void *pg_addr;
+  };
+Contains the pointer to a page in the hash map and the
+starting address of that page. 
+
+struct swap_table_entry
+  {
+    struct hash_elem hash_elem;
+    void *addr;
+    block_sector_t sector;
+  };
+Contains the pointer to a swap slot, the starting address of that
+slot and block sector where it is located. 
+
+// TODO
+---- ALGORITHMS ----
+
+>> B2: (5 marks)
+>> When a frame is required but none is free, some frame must be
+>> evicted.  Describe your code for choosing a frame to evict.
+
+If we require to allocate a frame and we don’t have enough space,
+we try to allocate a swap space. If we then decide to evict that 
+frame, we reclaim that swap slot. 
+>> B3: (5 marks)
+>> When a process P obtains a frame that was previously used by a
+>> process Q, how do you adjust the page table (and any other data
+>> structures) to reflect the frame Q no longer has?
+
+// TODO
+>> B4: (5 marks)
+>> Explain your heuristic for deciding whether a page fault for an
+>> invalid virtual address should cause the stack to be extended into
+>> the page that faulted.
+
+When we have a page fault, we use is_stack_access () to determine if
+the invalid memory access was a stack access. This method checks the
+if the address of the fault is within a valid range for stack access,
+i.e. within 32 bytes of esp and above 0.
+If so, we get upage (user virtual page) and kpage (kernel virtual 
+address) values for the new page from the fault address and extend
+the stack with this page accordingly.
+---- SYNCHRONIZATION ----
+
+>> B5: (5 marks)
+>> Explain the basics of your VM synchronisation design.  In
+>> particular, explain how it prevents deadlock.  (Refer to a
+>> textbook for an explanation of the necessary conditions for
+>> deadlock.)
+
+// TODO
+>> B6: (5 marks)
+>> A page fault in process P can cause another process Q's frame
+>> to be evicted.  How do you ensure that Q cannot access or modify
+>> the page during the eviction process?  How do you avoid a race
+>> between P evicting Q's frame and Q faulting the page back in?
+
+// TODO
+>> B7: (5 marks)
+>> Explain how you handle access to paged-out pages that occur
+>> during system calls. How do you gracefully handle attempted 
+>> accesses to invalid virtual addresses?
+
+// TODO
+---- RATIONALE ----
+
+>> B8: (5 marks)
+>> A single lock for the whole VM system would make
+>> synchronisation easy, but limit parallelism.  On the other hand,
+>> using many locks complicates synchronisation and raises the
+>> possibility for deadlock but allows for high parallelism.  Explain
+>> where your design falls along this continuum and why you chose to
+>> design it this way.
+
+// TODO
+             MEMORY MAPPED FILES
+             ===================
+
+---- DATA STRUCTURES ----
+
+>> C1: (5 marks)
+>> Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration that relates to your file mapping table.  
+>> Identify the purpose of each in 25 words or less.
+
+// ?
+
+---- ALGORITHMS ----
+
+>> C2: (5 marks)
+>> Describe how memory mapped files integrate into your virtual
+>> memory subsystem.  Explain how the page fault and eviction
+>> processes differ between swap pages and other pages.
+
+// TODO 
+>> C3: (5 marks)
+>> Explain how you determine whether a new file mapping overlaps
+>> any existing segment.
+
+In order to deal with this issue we keep track of what memory is
+used by memory mapped files (using file_map defined in thread.h)
+, to make sure we handle the page faults in the mapped regions 
+the right way and therefore when we add a new file mapping, 
+we can easily check if that segment is already occupied or not, 
+and proceed accordingly.  
+
+---- RATIONALE ----
+
+>> C4: (5 marks)
+>> Mappings created with "mmap" have similar semantics to those of
+>> data demand-paged from executables, except that "mmap" mappings are
+>> written back to their original files, not to swap.  This implies
+>> that much of their implementation can be shared.  Explain why your
+>> implementation either does or does not share much of the code for
+>> the two situations.
+
+// TODO
