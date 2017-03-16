@@ -1,6 +1,7 @@
 #include <syscall-nr.h>
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "threads/interrupt.h"
 #include "userprog/process.h"
@@ -79,11 +80,22 @@ syscall_init (void)
 static void
 is_pointer_valid (const void *param, struct intr_frame *f UNUSED)
 {
+  lock_acquire (&file_lock);
+  if (page_get_data (pg_round_down (param)) != NULL)
+    {
+      int i = * (int *) param;
+      if (i == 0)
+        {
+          barrier ();
+        }
+    }
   if (!is_user_vaddr (param) || (pagedir_get_page (thread_current ()->pagedir,
                                                   param) == NULL))
     {
+      lock_release (&file_lock);
       syscall_exit_aux (f, -1);
     }
+  lock_release (&file_lock);
 }
 
 static struct file_map *
@@ -213,9 +225,10 @@ syscall_write (struct intr_frame *f UNUSED)
   is_pointer_valid (buffer, f);
   is_pointer_valid (buffer + length - 1, f);
 
+  lock_acquire (&file_lock);
+
   uint32_t size_written = 0;
 
-  lock_acquire (&file_lock);
   if (fd == STDOUT_FILENO)
     {
       size_written = length;
@@ -408,11 +421,11 @@ syscall_mmap (struct intr_frame *f)
 {
   ARGUMENTS_IN_USER_SPACE (f, 2);
   int fd = (int) GET_ARGUMENT (f, 1);
-  void *addr = (void*) GET_ARGUMENT (f, 2);
+  void *addr = (void *) GET_ARGUMENT (f, 2);
   struct file_map *m = get_filemap (fd);
   if (m == NULL)
     {
-      // ERROR
+      f->eax = -1;
       return;
     }
   lock_acquire (&file_lock);

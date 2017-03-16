@@ -1,17 +1,21 @@
 #include "userprog/exception.h"
 #include <inttypes.h>
 #include <stdio.h>
+#include <string.h>
 #include "filesys/file.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/malloc.h"
+#include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "vm/page.h"
 #include "vm/frame.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
+static struct lock handler_lock;
 
 static void kill (struct intr_frame *);
 static void page_fault (struct intr_frame *);
@@ -63,6 +67,8 @@ exception_init (void)
      We need to disable interrupts for page faults because the
      fault address is stored in CR2 and needs to be preserved. */
   intr_register_int (14, 0, INTR_OFF, page_fault, "#PF Page-Fault Exception");
+
+  lock_init (&handler_lock);
 }
 
 /* Prints exception statistics. */
@@ -157,8 +163,9 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
+  lock_acquire (&handler_lock);  
   // check if the access is valid or not
-  struct page_table_entry *pg_data = page_get_data (fault_addr);
+  struct page_table_entry *pg_data = page_get_data (pg_round_down (fault_addr));
   if (pg_data != NULL)
     {
       // don't fault
@@ -170,10 +177,23 @@ page_fault (struct intr_frame *f)
           pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
                               ft_page->pg_addr, true);
           file_seek (pg_data->f, pg_data->mapping_index * PGSIZE);
-          file_read (pg_data->f, pg_data->pg_addr, PGSIZE);
-          return;
+          file_read (pg_data->f, ft_page->pg_addr, PGSIZE);
         }
+      else if (pg_data->l == NOT_LOADED)
+        {
+          ASSERT (pg_data->f != NULL);
+          struct frame_table_entry *ft_page = frame_put_page (false);
+          file_seek (pg_data->f, pg_data->load_offs);
+          file_read (pg_data->f, ft_page->pg_addr, pg_data->load_size);
+          pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
+                              ft_page->pg_addr, true);
+        }
+      pg_data->l = FRAME;
+      lock_release (&handler_lock);
+      return;
     }
+
+  lock_release (&handler_lock);
 
   thread_current ()->return_status = -1;
   printf ("Page fault at %p: %s error %s page in %s context.\n",

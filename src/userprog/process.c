@@ -546,13 +546,14 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    or disk read error occurs. */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable UNUSED)
 {
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
   ASSERT (ofs % PGSIZE == 0);
 
   file_seek (file, ofs);
+  off_t last_off = ofs;
   while (read_bytes > 0 || zero_bytes > 0)
     {
       /* Calculate how to fill this page.
@@ -562,27 +563,33 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
       /* Get a page of memory. */
-      struct frame_table_entry *ft_pg = frame_put_page (false);
-      uint8_t *kpage = ft_pg->pg_addr;
-      if (kpage == NULL)
-        return false;
+      //struct frame_table_entry *ft_pg = frame_put_page (false);
+      //uint8_t *kpage = ft_pg->pg_addr;
+      //if (kpage == NULL)
+      //  return false;
 
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          frame_evict_page (kpage);
-          return false;
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+      ///* Load this page. */
+      //if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+      //  {
+      //    frame_evict_page (kpage);
+      //    return false;
+      //  }
+      //memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable))
-        {
-          frame_evict_page (kpage);
-          return false;
-        }
+      ///* Add the page to the process's address space. */
+      //if (!install_page (upage, kpage, writable))
+      //  {
+      //    frame_evict_page (kpage);
+      //    return false;
+      //  }
 
-      page_insert_data (upage)->l = NOT_LOADED;
+      struct page_table_entry *pt_entry = page_insert_data (upage);
+      pt_entry->l = NOT_LOADED;
+      pt_entry->f = file;
+      pt_entry->load_size = page_read_bytes;
+      pt_entry->load_offs = last_off;
+
+      last_off += page_read_bytes;
 
       /* Advance. */
       read_bytes -= page_read_bytes;

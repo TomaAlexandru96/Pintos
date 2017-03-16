@@ -28,6 +28,8 @@ struct page_table_entry
     struct file *f;
     int mapping_index;
     int map_id;
+    size_t load_size;
+    off_t load_offs;
   };
 
 void page_init (void);
