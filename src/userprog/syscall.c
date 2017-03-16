@@ -477,7 +477,8 @@ syscall_munmap (struct intr_frame *f)
 void
 syscall_munmap_aux (int map_id)
 {
-  void *removed_mapps[hash_size (&thread_current ()->page_table)];
+  lock_acquire (&file_lock);
+  struct page_table_entry *removed_mapps[hash_size (&thread_current ()->page_table)];
   struct hash_iterator it;
   int index = 0;
 
@@ -489,13 +490,23 @@ syscall_munmap_aux (int map_id)
 
       if (pt_entry->f != NULL && pt_entry->map_id == map_id)
         {
-          removed_mapps[index] = pt_entry->pg_addr;
+          removed_mapps[index] = pt_entry;
           index++;
         }
     }
 
   for (int i = 0; i < index; i++)
     {
-      page_remove_data (removed_mapps[i]);
+      if (pagedir_is_dirty (thread_current ()->pagedir, removed_mapps[i]->pg_addr))
+        {
+          off_t file_size = file_length (removed_mapps[i]->f);
+          file_write_at (removed_mapps[i]->f, removed_mapps[i]->pg_addr,
+                        file_size / PGSIZE >= removed_mapps[i]->mapping_index
+                            ? PGSIZE
+                            : file_size % removed_mapps[i]->mapping_index,
+                        removed_mapps[i]->mapping_index * PGSIZE);
+        }
+      page_remove_data (removed_mapps[i]->pg_addr);
     }
+  lock_release (&file_lock);
 }

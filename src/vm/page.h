@@ -10,6 +10,7 @@
 #include "threads/thread.h"
 #include "filesys/file.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "vm/frame.h"
 
 hash_hash_func page_hash_func;

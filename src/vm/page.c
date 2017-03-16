@@ -63,6 +63,11 @@ void page_clear_page_table (void)
   struct hash_iterator it;
   int index = 0;
 
+  for (int i = 1; i < thread_current ()->last_vm_file_map; i++)
+    {
+      syscall_munmap_aux (i);
+    }
+
   hash_first (&it, &thread_current ()->page_table);
   while (hash_next (&it))
     {

@@ -165,7 +165,7 @@ page_fault (struct intr_frame *f)
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
 
-  lock_acquire (&handler_lock);  
+  lock_acquire (&handler_lock);
   // check if the access is valid or not
   struct page_table_entry *pg_data = page_get_data (pg_round_down (fault_addr));
   if (pg_data != NULL)
@@ -178,15 +178,13 @@ page_fault (struct intr_frame *f)
           struct frame_table_entry *ft_page = frame_put_page (true);
           pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
                               ft_page->pg_addr, true);
-          file_seek (pg_data->f, pg_data->mapping_index * PGSIZE);
-          file_read (pg_data->f, ft_page->pg_addr, PGSIZE);
+          file_read_at (pg_data->f, ft_page->pg_addr, PGSIZE, pg_data->mapping_index * PGSIZE);
         }
       else if (pg_data->l == NOT_LOADED)
         {
           ASSERT (pg_data->f != NULL);
           struct frame_table_entry *ft_page = frame_put_page (false);
-          file_seek (pg_data->f, pg_data->load_offs);
-          file_read (pg_data->f, ft_page->pg_addr, pg_data->load_size);
+          file_read_at (pg_data->f, ft_page->pg_addr, pg_data->load_size, pg_data->load_offs);
           pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
                               ft_page->pg_addr, true);
         }
@@ -206,7 +204,7 @@ page_fault (struct intr_frame *f)
 
       lock_release (&handler_lock);
       return;
-    } 
+    }
 
   lock_release (&handler_lock);
   thread_current ()->return_status = -1;
@@ -216,6 +214,6 @@ page_fault (struct intr_frame *f)
 bool
 is_stack_access (void *esp, void *addr)
 {
-  return addr > 0 && addr >= (esp - 32) &&
+  return (uint32_t) addr > 0 && addr >= (esp - 32) &&
           (PHYS_BASE - pg_round_down (addr)) <= (1 << 23);
 }
