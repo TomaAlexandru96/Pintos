@@ -50,12 +50,32 @@ page_insert_data (void *addr)
     PANIC ("malloc failed in page_insert_data");
 
   new_entry->pg_addr = addr;
-  new_entry->l = NOT_LOADED;
   new_entry->mapping_index = -1;
   hash_insert (&thread_current ()->page_table, &new_entry->hash_elem);
 
   lock_release (&page_lock);
   return new_entry;
+}
+
+void page_clear_page_table (void)
+{
+  void *removed_mapps[hash_size (&thread_current ()->page_table)];
+  struct hash_iterator it;
+  int index = 0;
+
+  hash_first (&it, &thread_current ()->page_table);
+  while (hash_next (&it))
+    {
+      struct page_table_entry *pt_entry =
+              hash_entry (hash_cur (&it), struct page_table_entry, hash_elem);
+      removed_mapps[index] = pt_entry->pg_addr;
+      index++;
+    }
+
+  for (int i = 0; i < index; i++)
+    {
+      page_remove_data (removed_mapps[i]);
+    }
 }
 
 void
@@ -69,6 +89,13 @@ page_remove_data (void *addr)
 
   struct page_table_entry *removed_entry = hash_entry (el,
                                   struct page_table_entry, hash_elem);
+
+  void *kpage = pagedir_get_page (thread_current ()->pagedir, removed_entry->pg_addr);
+  if (removed_entry->l == FRAME)
+    {
+      pagedir_clear_page (thread_current ()->pagedir, removed_entry->pg_addr);
+      palloc_free_page (kpage);
+    }
   free (removed_entry);
 
   lock_release (&page_lock);
