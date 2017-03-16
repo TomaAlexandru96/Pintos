@@ -567,6 +567,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       pt_entry->f = file;
       pt_entry->load_size = page_read_bytes;
       pt_entry->load_offs = last_off;
+      pt_entry->writable = writable;
 
       last_off += page_read_bytes;
 

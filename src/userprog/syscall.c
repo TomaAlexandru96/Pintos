@@ -290,11 +290,13 @@ syscall_open (struct intr_frame *frame UNUSED)
   lock_acquire (&file_lock);
   struct file *f = filesys_open (file);
   lock_release (&file_lock);
+
   if (f == NULL)
     {
       frame->eax = -1;
       return;
     }
+
   struct file_map *fm = (struct file_map *) malloc (sizeof (struct file_map));
   fm->fd = fd;
   fm->f = f;

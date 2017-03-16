@@ -51,6 +51,7 @@ page_insert_data (void *addr)
 
   new_entry->pg_addr = addr;
   new_entry->mapping_index = -1;
+  new_entry->writable = true;
   hash_insert (&thread_current ()->page_table, &new_entry->hash_elem);
 
   lock_release (&page_lock);
