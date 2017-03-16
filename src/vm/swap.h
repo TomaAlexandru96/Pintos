@@ -8,6 +8,8 @@
 #include "threads/malloc.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
+#include "devices/block.h"
+#include "lib/kernel/bitmap.h"
 
 /* The number of bloack sectors needed to store on page*/
 #define SWAP_SLOT_SIZE 8
