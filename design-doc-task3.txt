@@ -70,18 +70,22 @@ It holds the necessary data for a page.
 
 >> A2: (5 marks) 
 >> Describe your code for locating the frame, if any, that contains 
->> the data of a given page.fr
+>> the data of a given page.
 
-// TODO 
+We just iterate through the frame table and look at which page  
+the current frame is pointing to; if it is the given page, then
+we return the frame.  
 >> A3: (5 marks)
 >> How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame?
 >> Your answer should include a discussion of how you have implemented
 >> sharing of read only pages.
 
-As the spec mentions, “every virtual page is aliased to its kernel
-virtual page”.
-// TODO
+If 2 pages alias to a single frame and we try to access that, we only
+update the accessed and dirty bits of the page that made the access. 
+If you share a read only page, that means you won’t have any
+concurrency issues to deal with, hence no need for semaphores or any
+mutual exclusion, you just go and access it. 
 ---- SYNCHRONIZATION ----
 
 >> A4: (5 marks) 
@@ -144,8 +148,6 @@ struct swap_table_entry
   };
 Contains the pointer to a swap slot, the starting address of that
 slot and block sector where it is located. 
-
-// TODO
 ---- ALGORITHMS ----
 
 >> B2: (5 marks)
@@ -181,7 +183,12 @@ the stack with this page accordingly.
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
-// TODO
+Our VM memory prevents any deadlock because we ensure mutual exclusion
+between all threads (when threads have to access a common place in memory
+we introduce a lock), at every point we make sure a thread does not hold
+a resource while waiting for another one (this also wastes CPU cycles
+unnecessarily) and we avoid cycles by not holding and then waiting for 
+a resource.  
 >> B6: (5 marks)
 >> A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
@@ -194,7 +201,11 @@ the stack with this page accordingly.
 >> during system calls. How do you gracefully handle attempted 
 >> accesses to invalid virtual addresses?
 
-// TODO
+If we try to access an invalid virtual address which belonged to
+a paged-out page, then we just bring that page back. If we access
+an invalid virtual address, then we push the exit error code to 
+the stack, push the syscall_exit to the stack and call the
+interrupt handler passing the interrupt frame as parameter.      
 ---- RATIONALE ----
 
 >> B8: (5 marks)
@@ -205,7 +216,12 @@ the stack with this page accordingly.
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
 
-// TODO
+We consider that we’ve used the right amount of locks in order to 
+have the best tradeoff between parallelism and synchronisation. We
+introduce a lock if and only if 2 processes need to access a common
+resource or a shared memory address, unlock it immediately after they 
+finish using it, keeping the rest of code free for parallelism between 
+threads.   
              MEMORY MAPPED FILES
              ===================
 
