@@ -472,7 +472,6 @@ syscall_munmap (struct intr_frame *f)
 {
   ARGUMENTS_IN_USER_SPACE (f, 1);
   int mapping_id = (int) GET_ARGUMENT (f, 1);
-
   syscall_munmap_aux (mapping_id);
 }
 
