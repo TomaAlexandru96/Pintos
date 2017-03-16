@@ -168,7 +168,8 @@ page_fault (struct intr_frame *f)
   lock_acquire (&handler_lock);
   // check if the access is valid or not
   struct page_table_entry *pg_data = page_get_data (pg_round_down (fault_addr));
-  if (pg_data != NULL)
+  // writing to non writable memory
+  if (pg_data != NULL && !(!pg_data->writable && write))
     {
       // don't fault
       if (pg_data->l == FILE_SYS)
@@ -177,7 +178,7 @@ page_fault (struct intr_frame *f)
 
           struct frame_table_entry *ft_page = frame_put_page (true);
           pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
-                              ft_page->pg_addr, true);
+                              ft_page->pg_addr, pg_data->writable);
           file_read_at (pg_data->f, ft_page->pg_addr, PGSIZE, pg_data->mapping_index * PGSIZE);
         }
       else if (pg_data->l == NOT_LOADED)
@@ -186,7 +187,7 @@ page_fault (struct intr_frame *f)
           struct frame_table_entry *ft_page = frame_put_page (false);
           file_read_at (pg_data->f, ft_page->pg_addr, pg_data->load_size, pg_data->load_offs);
           pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
-                              ft_page->pg_addr, true);
+                              ft_page->pg_addr, pg_data->writable);
         }
       pg_data->l = FRAME;
       lock_release (&handler_lock);
@@ -214,6 +215,6 @@ page_fault (struct intr_frame *f)
 bool
 is_stack_access (void *esp, void *addr)
 {
-  return (uint32_t) addr > 0 && addr >= (esp - 32) &&
-          (PHYS_BASE - pg_round_down (addr)) <= (1 << 23);
+  return addr >= (esp - 32) && (PHYS_BASE - pg_round_down (addr)) <= (1 << 23)
+         && addr < PHYS_BASE;
 }

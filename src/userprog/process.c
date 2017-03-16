@@ -211,6 +211,11 @@ process_exit (void)
 
   if (cur->parent != NULL)
     {
+      char *save_ptr;
+      char file_name[strlen(cur->name) + 1];
+      strlcpy (file_name, cur->name, strlen(cur->name) + 1);
+      printf ("%s: exit(%d)\n", strtok_r (file_name, " ", &save_ptr), cur->return_status);
+      
       // remove cur from parent's executing_children
       // and move to finished_children
       struct fin_process_map *map = (struct fin_process_map *)
@@ -257,11 +262,6 @@ process_exit (void)
 
   // allow writes
   file_close (cur->deny_file);
-
-  char *save_ptr;
-  char file_name[strlen(cur->name) + 1];
-  strlcpy (file_name, cur->name, strlen(cur->name) + 1);
-  printf ("%s: exit(%d)\n", strtok_r (file_name, " ", &save_ptr), cur->return_status);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -567,6 +567,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       pt_entry->f = file;
       pt_entry->load_size = page_read_bytes;
       pt_entry->load_offs = last_off;
+      pt_entry->writable = writable;
 
       last_off += page_read_bytes;
 
