@@ -38,9 +38,12 @@ None.
 
 struct thread 
   {
+    …
 #ifdef VM
     struct hash page_table;
+    … 
 #endif
+    …
   }
 For each thread (a.k.a. process) you need to keep track of its own page table.
 
@@ -78,7 +81,6 @@ It holds the necessary data for a page.
 
 As the spec mentions, “every virtual page is aliased to its kernel
 virtual page”.
-
 // TODO
 ---- SYNCHRONIZATION ----
 
@@ -110,8 +112,11 @@ space for creating the frame.
 >> Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
 
-// TODO
-
+We chose to use the hash table for representing virtual-to-physical
+mappings due to the fact that we want to retrieve really fast a page 
+(In constant time - O(1)) and also have insertion in constant time. Hence,
+the only data structure that we could use, which was implemented already 
+implemented by Pintos and didn’t overcomplicate the problem was the hash map. 
                PAGING TO AND FROM DISK
                =======================
 
@@ -212,7 +217,16 @@ the stack with this page accordingly.
 >> enumeration that relates to your file mapping table.  
 >> Identify the purpose of each in 25 words or less.
 
-// ?
+struct thread
+  {
+    …
+#ifdef VM
+    …
+    int last_vm_file_map;
+#endif
+    …
+  }
+Address of the last file which was mapped into virtual memory.
 
 ---- ALGORITHMS ----
 
