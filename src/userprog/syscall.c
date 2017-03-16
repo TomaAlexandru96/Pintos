@@ -450,13 +450,15 @@ syscall_mmap (struct intr_frame *f)
         }
     }
 
+  struct file *opened = file_reopen (m->f);
+
   for (int i = 0; i < no_pages; i++)
     {
       struct page_table_entry *entry = page_insert_data ((void *) ((int) addr +
                                        PGSIZE*i));
       entry->l = FILE_SYS;
       entry->mapping_index = i;
-      entry->f = m->f;
+      entry->f = opened;
       entry->map_id = thread_current ()-> last_vm_file_map;
     }
   f->eax = thread_current ()-> last_vm_file_map;
@@ -481,6 +483,7 @@ syscall_munmap_aux (int map_id)
   struct page_table_entry *removed_mapps[hash_size (&thread_current ()->page_table)];
   struct hash_iterator it;
   int index = 0;
+  struct file *mmap_file = NULL;
 
   hash_first (&it, &thread_current ()->page_table);
   while (hash_next (&it))
@@ -491,22 +494,30 @@ syscall_munmap_aux (int map_id)
       if (pt_entry->f != NULL && pt_entry->map_id == map_id)
         {
           removed_mapps[index] = pt_entry;
+          mmap_file = pt_entry->f;
           index++;
         }
     }
+
+  if (mmap_file == NULL)
+    {
+      return;
+    }
+
+  off_t file_size = file_length (mmap_file);
 
   for (int i = 0; i < index; i++)
     {
       if (pagedir_is_dirty (thread_current ()->pagedir, removed_mapps[i]->pg_addr))
         {
-          off_t file_size = file_length (removed_mapps[i]->f);
           file_write_at (removed_mapps[i]->f, removed_mapps[i]->pg_addr,
-                        file_size / PGSIZE >= removed_mapps[i]->mapping_index
-                            ? PGSIZE
-                            : file_size % removed_mapps[i]->mapping_index,
+                        file_size / PGSIZE == removed_mapps[i]->mapping_index
+                                  ? file_size % PGSIZE
+                                  : PGSIZE,
                         removed_mapps[i]->mapping_index * PGSIZE);
         }
       page_remove_data (removed_mapps[i]->pg_addr);
     }
+  file_close (mmap_file);
   lock_release (&file_lock);
 }
