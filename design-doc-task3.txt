@@ -83,6 +83,8 @@ It holds the necessary data for a page.
 >> Describe your code for locating the frame, if any, that contains
 >> the data of a given page.
 
+The page table is implemented on top of an hash table. We use this to get
+
 
 >> A3: (5 marks)
 >> How does your code coordinate accessed and dirty bits between
@@ -90,12 +92,11 @@ It holds the necessary data for a page.
 >> Your answer should include a discussion of how you have implemented
 >> sharing of read only pages.
 
-
-If 2 pages alias to a single frame and we try to access it via one of them, 
-we only update the accessed and dirty bits of the page that made the access. 
-If we share a read only page we won’t have any concurrency issues to deal with, 
-hence no need for semaphores or mutual exclusion. 
-
+If 2 pages alias to a single frame and we try to access that, we only
+update the accessed and dirty bits of the page that made the access.
+If you share a read only page, that means you won’t have any
+concurrency issues to deal with, hence no need for semaphores or any
+mutual exclusion, you just go and access it.
 ---- SYNCHRONIZATION ----
 
 >> A4: (5 marks)
@@ -103,13 +104,14 @@ hence no need for semaphores or mutual exclusion.
 >> how are races avoided? You should consider both when there are
 >> and are not free frames available in memory.
 
-When two processes try to access the same frame at the same time 
-(either by a retrieval or removal of a page) we acquire the lock of 
-the frame table (defined as a static variable at the top of frame.c),
-and release it at the end of the function call. 
+When two processes try to access the same frame at the same time
+(Either by a retrieval or removal of a page) we acquire the lock of
+the frame table (defined as a static variable at the top of frame.c)
+right from the beginning and we release it at the end of the function
+call.
 In the function where we return the page and map it to the frame
-slot (frame_get_page), we first initialise the lock, obtain
-a single free page (from the user pool) and return it to kernel 
+slot (frame_get_page), we first initialise the lock, we obtain
+a single free page (from the user pool) and return it to kernel
 virtual address and we insert this new page in the current thread’s
 page table and we set the location of this page to be the frame.
 We allocate memory for the frame. If we have space and the
@@ -126,10 +128,10 @@ space for creating the frame.
 >> representing virtual-to-physical mappings?
 
 We chose to use the hash table for representing virtual-to-physical
-mappings due to the fact that we want to retrieve pages quickly
-(in constant time - O(1)) and also have insertion in constant time. Hence
-we chose the only data structure that we could use which was implemented already 
-implemented by Pintos and didn’t overcomplicate the problem was the hash map. 
+mappings due to the fact that we want to retrieve really fast a page
+(In constant time - O(1)) and also have insertion in constant time. Hence,
+the only data structure that we could use, which was implemented already
+implemented by Pintos and didn’t overcomplicate the problem was the hash map.
 
                PAGING TO AND FROM DISK
                =======================
@@ -237,17 +239,21 @@ there is no lock for ensuring mutex on writing to pages.
 If we were going to do it, we would require Q acquire the ft_lock also when it
 needs to write to the page.
 
-// TODO
+
 >> B7: (5 marks)
 >> Explain how you handle access to paged-out pages that occur
 >> during system calls. How do you gracefully handle attempted
 >> accesses to invalid virtual addresses?
 
-If we try to access an invalid virtual address which belonged to
-a paged-out page, then we just bring that page back. If we access
-an invalid virtual address, then we push the exit error code to
-the stack, push the syscall_exit to the stack and call the
-interrupt handler passing the interrupt frame as parameter.
+Both the user and kernel can use the system calls. If it is a user, it could
+need to access pages that are not in the memory, but in the swap or file system.
+page_fault () will get called. If the page data is not null, we'll check the
+location of it, weather it is in the swap, file system or it is not loaded. If
+it is in the swap, we reclaim it. If it is in the file system, we read it in
+from the file using the mapping id of the file. If it is not loaded we read it
+in from the file system using the offset.
+
+
 ---- RATIONALE ----
 
 >> B8: (5 marks)
@@ -258,12 +264,10 @@ interrupt handler passing the interrupt frame as parameter.
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
 
-We consider that we’ve used the right amount of locks in order to
-have the best tradeoff between parallelism and synchronisation. We
-introduce a lock if and only if 2 processes need to access a common
-resource or a shared memory address, unlock it immediately after they
-finish using it, keeping the rest of code free for parallelism between
-threads.
+We use locks for shared resources. In the frame table we use 2 locks, one for
+inserting and removing entries and another one for eviction.  
+
+
              MEMORY MAPPED FILES
              ===================
 
