@@ -135,6 +135,7 @@ struct thread
 #ifdef VM
     struct hash page_table;
     int last_vm_file_map;
+    void **fault_esp;
 #endif
 
     int64_t wake_up_tick;               /* To monitor of sleep_time */

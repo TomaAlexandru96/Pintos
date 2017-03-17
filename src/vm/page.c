@@ -28,11 +28,17 @@ page_less_func (const struct hash_elem *a,
 struct page_table_entry *
 page_get_data (void *addr)
 {
+  return page_get_data_aux (thread_current (), addr);
+}
+
+struct page_table_entry *
+page_get_data_aux (struct thread *t, void *addr)
+{
   lock_acquire (&page_lock);
   struct page_table_entry search;
   search.pg_addr = addr;
 
-  struct hash_elem *el = hash_find (&thread_current ()->page_table, &search.hash_elem);
+  struct hash_elem *el = hash_find (&t->page_table, &search.hash_elem);
   lock_release (&page_lock);
   if (el == NULL)
     return NULL;

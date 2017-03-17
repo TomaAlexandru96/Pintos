@@ -36,6 +36,7 @@ struct page_table_entry
 
 void page_init (void);
 struct page_table_entry *page_get_data (void *);
+struct page_table_entry *page_get_data_aux (struct thread *, void *);
 struct page_table_entry *page_insert_data (void *);
 void page_remove_data (void *);
 void page_clear_page_table (void);

@@ -17,7 +17,6 @@
 
 hash_hash_func swap_hash_func;
 hash_less_func swap_less_func;
-static int get_free_slot (void);
 bool is_swap_full (void);
 
 struct swap_table_entry
@@ -28,7 +27,7 @@ struct swap_table_entry
 };
 
 void swap_init(void);
-struct block_sector_t *reclaim_swap_slot (void *);
+void *reclaim_swap_slot (void *);
 void insert_swap_slot (void *);
 
 #endif

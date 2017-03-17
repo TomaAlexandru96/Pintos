@@ -115,6 +115,7 @@ thread_init (void)
   list_init (&initial_thread->finished_children);
   sema_init (&initial_thread->sema_wait, 0);
   initial_thread->last_vm_file_map = 1;
+  initial_thread->fault_esp = NULL;
   #endif
 }
 
@@ -257,6 +258,7 @@ thread_create (const char *name, int priority,
   #ifdef VM
   hash_init (&t->page_table, &page_hash_func, &page_less_func, NULL);
   t->last_vm_file_map = 1;
+  t->fault_esp = NULL;
   #endif
 
   intr_set_level (old_level);
