@@ -60,9 +60,7 @@ enum location
   };
 
 Used to keep track of the location of a page weather it is in the physical
-memory or in the swap. If there is a page fault, we can set location to swap.
-We then check again, if it is not in the swap, because the location now is
-SWAP, it means we have an error.
+memory, swap, file system or not loaded.
 
 struct page_table_entry
   {
@@ -73,8 +71,22 @@ struct page_table_entry
     int mapping_fd;
     int mapping_size;
   };
-This struct simulates the the supplemental page table explained in the spec.
-It holds the necessary data for a page.
+
+It is used to implement the supplementary page table. Each entry keeps the page
+address, mapping index, mapping file descriptor, and the mapping size. hash_elem
+is used to make a hash table out of it.
+
+
+struct frame_table_entry
+  {
+    struct hash_elem hash_elem;
+    void *pg_addr;
+    struct page_table_entry *u_page;
+  };
+
+
+It is used to implement the frame table. Each entry keeps the address of the page
+and a pointer to the page entry.
 
 
 ---- ALGORITHMS ----
@@ -83,7 +95,8 @@ It holds the necessary data for a page.
 >> Describe your code for locating the frame, if any, that contains
 >> the data of a given page.
 
-The page table is implemented on top of an hash table. We use this to get
+The page table is implemented on top of an hash table. We use this table
+to insert and retrieve the entries in the table based on the page address.
 
 
 >> A3: (5 marks)
@@ -97,6 +110,7 @@ update the accessed and dirty bits of the page that made the access.
 If you share a read only page, that means you won’t have any
 concurrency issues to deal with, hence no need for semaphores or any
 mutual exclusion, you just go and access it.
+
 ---- SYNCHRONIZATION ----
 
 >> A4: (5 marks)
@@ -127,11 +141,9 @@ space for creating the frame.
 >> Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
 
-We chose to use the hash table for representing virtual-to-physical
-mappings due to the fact that we want to retrieve really fast a page
-(In constant time - O(1)) and also have insertion in constant time. Hence,
-the only data structure that we could use, which was implemented already
-implemented by Pintos and didn’t overcomplicate the problem was the hash map.
+We chose a hash map to represent the mapping because it has constant time
+insertion and deletion operations which are used a lot throughout the
+implementation of the frame table and the page table.
 
                PAGING TO AND FROM DISK
                =======================
@@ -172,11 +184,9 @@ referred is the first used to store that particular page.
 >> When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
 
-We implemented random eviction algorithm. We generate a pseudo-random number
-using random_ulong (), then we mod this number with the size of the table. This
-gives us the index, i, of the entry in the hash table that we want to evict. Then
-we iterate through the hash table from the start i times to pick the entry in
-the hash table.
+We implemented a clock eviction algorithm that searches for the least popular
+page by checking the access bit of the pages. When we first encounter the page
+that has the access bit set to false, we evict it.
 
 
 >> B3: (5 marks)
@@ -265,7 +275,15 @@ in from the file system using the offset.
 >> design it this way.
 
 We use locks for shared resources. In the frame table we use 2 locks, one for
-inserting and removing entries and another one for eviction.  
+inserting and removing entries and another one for eviction. This allows us to
+parallelise the tasks of eviction and the tasks of insertion and deletion from
+frame table. For the supplementary page table we have one lock, as most
+operations are either insert or delete. Also for swap table we use only one lock.
+Overall, we didn't make use of too many locks and we try to minimise the lines
+of code that run in mutex. We think that out code's parallelism is not affected
+by this. On the other hand we don't think out design allows us to increase the
+parallelism. If we tried to reduce the number of locks we use or the lines of
+code that run in mutex, we could introduce new possibilities for deadlocks.
 
 
              MEMORY MAPPED FILES
@@ -288,6 +306,18 @@ struct thread
 #endif
     …
   }
+
+  struct page_table_entry
+    {
+    ...
+      void *pg_addr;
+      enum location l;
+      struct file *f;
+      int mapping_index;
+      int map_id;
+      ...
+    };
+
 Address of the last file which was mapped into virtual memory.
 
 ---- ALGORITHMS ----
@@ -297,17 +327,22 @@ Address of the last file which was mapped into virtual memory.
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
-// TODO
+When we call mmap(), we create multiple pages based on the size of file. When we have
+a page fault we write the contents of the file at the mapping index position
+back to the page that faulted and we put in the frame.
+We use the location member of the page table entry  to differentiate between
+swap access and other kind of memory access and memory mapped files.
+For eviction we use a clock algorithm that evicts the least popular page whenever
+we put a page in a frame.
+
+
 >> C3: (5 marks)
 >> Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
 
-In order to deal with this issue we keep track of what memory is
-used by memory mapped files (using file_map defined in thread.h)
-, to make sure we handle the page faults in the mapped regions
-the right way and therefore when we add a new file mapping,
-we can easily check if that segment is already occupied or not,
-and proceed accordingly.
+We search through the whole virtual pages of the current process and if
+any of these pages overlap the new file mapping, we mark it as a fail.
+
 
 ---- RATIONALE ----
 
@@ -319,4 +354,8 @@ and proceed accordingly.
 >> implementation either does or does not share much of the code for
 >> the two situations.
 
-// TODO
+We differentiate between the locations of the virtual pages in the fault handler
+and we treat each of them separately. We couldn't find a way to share the
+reading from the file or the swap partition onto the page because this process
+requires reading from different files at different positions and different
+lengths.
