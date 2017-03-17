@@ -27,7 +27,7 @@ struct swap_table_entry
 };
 
 void swap_init(void);
-void *reclaim_swap_slot (void *);
+void reclaim_swap_slot (void *);
 void insert_swap_slot (void *);
 
 #endif

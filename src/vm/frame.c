@@ -6,6 +6,7 @@ static hash_less_func frame_less_func;
 
 static struct hash frame_table;
 static struct lock ft_lock;
+static struct lock evict_lock;
 
 /*
   Initalizes the frame table
@@ -15,6 +16,7 @@ frame_init (void)
 {
   hash_init (&frame_table, &frame_hash_func, &frame_less_func, NULL);
   lock_init (&ft_lock);
+  lock_init (&evict_lock);
 }
 
 static unsigned
@@ -42,10 +44,8 @@ frame_put_page (struct page_table_entry *pg, bool zero_initialized)
 
   if (addr == NULL)
     {
-      lock_release (&ft_lock);
       frame_evict_page (frame_evict_algo ());
       addr = palloc_get_page (PAL_USER | zero_initialized ? PAL_ZERO : 0);
-      lock_acquire (&ft_lock);
     }
 
   pagedir_set_page (thread_current ()->pagedir, pg->pg_addr, addr, pg->writable);
@@ -59,72 +59,59 @@ frame_put_page (struct page_table_entry *pg, bool zero_initialized)
     }
   h_entry->pg_addr = addr;
   h_entry->u_page = pg;
+
   hash_insert (&frame_table, &h_entry->hash_elem);
   lock_release (&ft_lock);
 
   return h_entry;
 }
 
-/* For now the alforithm is based on random selection of frames */
-void *
+/* Clock evict */
+struct frame_table_entry *
 frame_evict_algo (void)
 {
-  lock_acquire (&ft_lock);
-  int frame_table_size = (int) hash_size (&frame_table);
-  int rand_idx = (int) (random_ulong () % frame_table_size) + 1;
+  lock_acquire (&evict_lock);
 
-  struct hash_iterator itr;
-  hash_first (&itr, &frame_table);
-  for (int i = 0; i < rand_idx; i++)
+  struct hash_iterator it;
+  struct frame_table_entry *ft_entry = NULL;
+
+  hash_first (&it, &frame_table);
+  while (hash_next (&it))
     {
-      hash_next (&itr);
+      ft_entry = hash_entry (hash_cur (&it), struct frame_table_entry, hash_elem);
+      if (pagedir_is_accessed (ft_entry->u_page->pagedir, ft_entry->u_page->pg_addr))
+        {
+          break;
+        }
     }
 
-  struct page_table_entry *pt_entry =
-            hash_entry (hash_cur (&itr), struct page_table_entry, hash_elem);
+  ASSERT (ft_entry != NULL);
 
-  lock_release (&ft_lock);
-  return pt_entry->pg_addr;
+  lock_release (&evict_lock);
+  return ft_entry;
 }
 
-void frame_evict_page (void *addr)
+void frame_evict_page (struct frame_table_entry *h_entry)
 {
-  lock_acquire (&ft_lock);
-  struct frame_table_entry h_entry;
-  h_entry.pg_addr = addr;
-  struct hash_elem *el = hash_delete (&frame_table, &h_entry.hash_elem);
+  lock_acquire (&evict_lock);
+  struct hash_elem *el = hash_delete (&frame_table, &h_entry->hash_elem);
   ASSERT (el != NULL);
 
-  struct frame_table_entry *removed_entry = hash_entry (el,
-                                  struct frame_table_entry, hash_elem);
-  insert_swap_slot (addr);
-  removed_entry->u_page->l = SWAP;
+  insert_swap_slot (h_entry->u_page->pg_addr);
+  h_entry->u_page->l = SWAP;
+  pagedir_clear_page (h_entry->u_page->pagedir,
+              h_entry->u_page->pg_addr);
 
-  palloc_free_page (addr);
-  free (removed_entry);
-  lock_release (&ft_lock);
-}
-
-void
-frame_remove_page (void *addr)
-{
-  lock_acquire (&ft_lock);
-  struct frame_table_entry h_entry;
-  h_entry.pg_addr = addr;
-  struct hash_elem *el = hash_delete (&frame_table, &h_entry.hash_elem);
-  ASSERT (el != NULL);
-  struct frame_table_entry *removed_entry = hash_entry (el,
-                                  struct frame_table_entry, hash_elem);
-  palloc_free_page (addr);
-  free (removed_entry);
-  lock_release (&ft_lock);
+  palloc_free_page (h_entry->pg_addr);
+  free (h_entry);
+  lock_release (&evict_lock);
 }
 
 void
 frame_reclaim (struct page_table_entry *en)
 {
+  lock_acquire (&ft_lock);
+  reclaim_swap_slot (en->pg_addr);
   frame_put_page (en, false);
-  void *cpy = reclaim_swap_slot (en->pg_addr);
-  memcpy(en->pg_addr, cpy, PGSIZE);
-  free (cpy);
+  lock_acquire (&ft_lock);
 }

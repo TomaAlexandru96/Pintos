@@ -81,19 +81,14 @@ insert_swap_slot (void *pg_addr)
   lock_release (&swap_lock);
 }
 
-void *
+void
 reclaim_swap_slot (void *pg_addr)
 {
   lock_acquire (&swap_lock);
   struct swap_table_entry search;
   search.addr = pg_addr;
   struct hash_elem *elem = hash_delete (&swap_table, &search.hash_elem);
-
-  if (elem == NULL)
-    {
-      // ERROR: not in swap
-      return NULL;
-    }
+  ASSERT (elem != NULL);
 
   struct swap_table_entry *reclaim_elem = hash_entry (elem,
                                           struct swap_table_entry, hash_elem);
@@ -103,19 +98,12 @@ reclaim_swap_slot (void *pg_addr)
       bitmap_set (slots_map, reclaim_elem->sector + i, false);
     }
 
-  void *reclaim_page = malloc (PGSIZE);
-  if (reclaim_page == NULL)
-    {
-      PANIC ("Malloc failed!");
-    }
-
   for (int i = 0; i < SWAP_SLOT_SIZE; i++)
     {
-      block_read (swap_block, (int) reclaim_elem->sector + i, reclaim_page);
-      reclaim_page += BLOCK_SECTOR_SIZE;
+      block_read (swap_block, (int) reclaim_elem->sector + i, pg_addr);
+      pg_addr += BLOCK_SECTOR_SIZE;
     }
 
   free (reclaim_elem);
   lock_release (&swap_lock);
-  return reclaim_page;
 }
