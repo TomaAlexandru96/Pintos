@@ -24,9 +24,8 @@ struct frame_table_entry
 
 void frame_init (void);
 struct frame_table_entry *frame_put_page (struct page_table_entry *, bool);
-void frame_remove_page (void *addr);
-void *frame_evict_algo (void);
-void frame_evict_page (void *addr);
+struct frame_table_entry *frame_evict_algo (void);
+void frame_evict_page (struct frame_table_entry *);
 void frame_reclaim (struct page_table_entry *);
 
 #endif /* vm/frame.h */

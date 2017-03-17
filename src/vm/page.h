@@ -25,6 +25,7 @@ struct page_table_entry
   {
     struct hash_elem hash_elem;
     void *pg_addr;
+    uint32_t *pagedir;
     enum location l;
     struct file *f;
     bool writable;
