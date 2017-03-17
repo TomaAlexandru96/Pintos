@@ -1,17 +1,19 @@
 #include "swap.h"
+#include <stdio.h>
 
 static struct lock swap_lock;
 static struct block *swap_block;
 static struct bitmap *slots_map;
 static struct hash swap_table;
-#define SWAP_SIZE(swap_block) ((uint32_t) block_size ((struct block *) swap_block))
 
+static int get_free_slot (void);
 
 void
 swap_init(void)
 {
   swap_block = block_get_role (BLOCK_SWAP);
-  slots_map = bitmap_create (SWAP_SIZE (swap_block) / PGSIZE);
+  slots_map = bitmap_create (block_size (swap_block));
+
   lock_init (&swap_lock);
   hash_init (&swap_table, &swap_hash_func, &swap_less_func, NULL);
 }
@@ -35,19 +37,23 @@ swap_less_func (const struct hash_elem *a,
   return a_el < b_el;
 }
 
+bool
+is_swap_full (void)
+{
+  return (int) bitmap_scan (slots_map, 0, SWAP_SLOT_SIZE, false) == -1;
+}
+
 static int
 get_free_slot (void)
 {
-  int slot_size = SWAP_SIZE (swap_block) / PGSIZE;
-  bool swap_full = bitmap_all (slots_map, 0, slot_size);
   int start = 0;
-  if (!swap_full)
+  if (!is_swap_full ())
     {
-      start = (int) bitmap_scan_and_flip (slots_map, start, slot_size, false);
+      start = (int) bitmap_scan (slots_map, 0, SWAP_SLOT_SIZE, false);
     }
   else
     {
-        PANIC ("Swap partition is full!");
+      PANIC ("Swap partition is full!");
     }
     return start;
 }
@@ -67,24 +73,21 @@ insert_swap_slot (void *pg_addr)
   new_entry->sector = start;
   hash_insert (&swap_table, &new_entry->hash_elem);
 
-  bitmap_set (slots_map, start, true);
   for (int i = 0; i < SWAP_SLOT_SIZE; i++) {
-    block_write (swap_block, start, (const void *) pg_addr);
+    bitmap_set (slots_map, start + i, true);
+    block_write (swap_block, start + i, (const void *) pg_addr);
     pg_addr += BLOCK_SECTOR_SIZE;
-    start++;
   }
   lock_release (&swap_lock);
 }
 
-struct block_sector_t *
+void *
 reclaim_swap_slot (void *pg_addr)
 {
   lock_acquire (&swap_lock);
   struct swap_table_entry search;
   search.addr = pg_addr;
   struct hash_elem *elem = hash_delete (&swap_table, &search.hash_elem);
-
-
 
   if (elem == NULL)
     {
@@ -97,8 +100,7 @@ reclaim_swap_slot (void *pg_addr)
 
   for (int i = 0; i < SWAP_SLOT_SIZE; i++)
     {
-      bitmap_scan_and_flip (slots_map, (int) reclaim_elem->sector,
-                                        SWAP_SLOT_SIZE, false);
+      bitmap_set (slots_map, reclaim_elem->sector + i, false);
     }
 
   void *reclaim_page = malloc (PGSIZE);
@@ -110,7 +112,7 @@ reclaim_swap_slot (void *pg_addr)
   for (int i = 0; i < SWAP_SLOT_SIZE; i++)
     {
       block_read (swap_block, (int) reclaim_elem->sector + i, reclaim_page);
-      reclaim_page += SWAP_SLOT_SIZE;
+      reclaim_page += BLOCK_SECTOR_SIZE;
     }
 
   free (reclaim_elem);

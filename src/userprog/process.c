@@ -215,7 +215,7 @@ process_exit (void)
       char file_name[strlen(cur->name) + 1];
       strlcpy (file_name, cur->name, strlen(cur->name) + 1);
       printf ("%s: exit(%d)\n", strtok_r (file_name, " ", &save_ptr), cur->return_status);
-      
+
       // remove cur from parent's executing_children
       // and move to finished_children
       struct fin_process_map *map = (struct fin_process_map *)
@@ -587,24 +587,14 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
-  struct frame_table_entry *ft_pg = frame_put_page (true);
-  kpage = ft_pg->pg_addr;
-  if (kpage != NULL)
-    {
-      void *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
-      success = install_page (upage, kpage, true);
-      if (success)
-        {
-          *esp = PHYS_BASE;
+  void *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
+  *esp = PHYS_BASE;
 
-          page_insert_data (upage)->l = FRAME;
-        }
-      else
-        {
-          frame_evict_page (kpage);
-        }
-    }
-  return success;
+  struct page_table_entry *en = page_insert_data (upage);
+  en->writable = true;
+  struct frame_table_entry *ft_pg = frame_put_page (en, true);
+
+  return true;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
