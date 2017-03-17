@@ -27,6 +27,7 @@ struct page_table_entry
     void *pg_addr;
     enum location l;
     struct file *f;
+    bool writable;
     int mapping_index;
     int map_id;
     size_t load_size;
