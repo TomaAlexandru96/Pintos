@@ -38,6 +38,7 @@
 #include "filesys/fsutil.h"
 #endif
 #ifdef VM
+#include "vm/swap.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 #endif
@@ -136,6 +137,7 @@ main (void)
   /* initialize frame table */
   frame_init ();
   page_init ();
+  swap_init ();
 #endif
 
   printf ("Boot complete.\n");

@@ -12,6 +12,7 @@
 #include "threads/vaddr.h"
 #include "vm/page.h"
 #include "vm/frame.h"
+#include "vm/swap.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -166,6 +167,7 @@ page_fault (struct intr_frame *f)
      which fault_addr refers. */
 
   lock_acquire (&handler_lock);
+
   // check if the access is valid or not
   struct page_table_entry *pg_data = page_get_data (pg_round_down (fault_addr));
   // writing to non writable memory
@@ -176,38 +178,42 @@ page_fault (struct intr_frame *f)
         {
           ASSERT (pg_data->f != NULL);
 
-          struct frame_table_entry *ft_page = frame_put_page (true);
-          pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
-                              ft_page->pg_addr, pg_data->writable);
+          struct frame_table_entry *ft_page = frame_put_page (pg_data, true);
           file_read_at (pg_data->f, ft_page->pg_addr, PGSIZE, pg_data->mapping_index * PGSIZE);
         }
       else if (pg_data->l == NOT_LOADED)
         {
           ASSERT (pg_data->f != NULL);
-          struct frame_table_entry *ft_page = frame_put_page (false);
+          struct frame_table_entry *ft_page = frame_put_page (pg_data, false);
           file_read_at (pg_data->f, ft_page->pg_addr, pg_data->load_size, pg_data->load_offs);
-          pagedir_set_page (thread_current ()->pagedir, pg_data->pg_addr,
-                              ft_page->pg_addr, pg_data->writable);
         }
-      pg_data->l = FRAME;
+      else if (pg_data->l == SWAP)
+        {
+          frame_reclaim (pg_data);
+        }
       lock_release (&handler_lock);
       return;
     }
 
-  /*  Check if fault address is at expected location caused by PUSH or PUSHA */
-  if(is_stack_access (f->esp, fault_addr))
+  void **esp = f->esp;
+  if (thread_current ()->fault_esp != NULL)
+    {
+      esp = thread_current ()->fault_esp;
+    }
+
+  // Check if fault address is at expected location caused by PUSH or PUSHA
+  if(is_stack_access (esp, fault_addr))
     {
       void *upage = pg_round_down (fault_addr);
-      void *kpage = frame_put_page (true)->pg_addr;
-
-      pagedir_set_page (thread_current ()->pagedir, upage, kpage, true);
-      page_insert_data(upage)->l = FRAME;
+      struct page_table_entry *pg_en = page_insert_data(upage);
+      void *kpage = frame_put_page (pg_en, true)->pg_addr;
 
       lock_release (&handler_lock);
       return;
     }
 
   lock_release (&handler_lock);
+
   thread_current ()->return_status = -1;
   kill (f);
 }
