@@ -19,11 +19,15 @@ Fraser Price         <fp914@imperial.ac.uk>
 >> If you have any preliminary comments on your submission, or notes for the
 >> markers, please give them here.
 
-No.
+None.
+
+
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
+
 None.
+
 
             PAGE TABLE MANAGEMENT
             =====================
@@ -33,26 +37,32 @@ None.
 >> A1: (5 marks)
 >> Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
->> enumeration that relates to your supplemental page table.  
+>> enumeration that relates to your supplemental page table.
 >> Identify the purpose of each in 25 words or less.
 
-struct thread 
+struct thread
   {
     …
 #ifdef VM
     struct hash page_table;
-    … 
+    …
 #endif
     …
   }
-Each thread (a.k.a. process) keeps track of its own page table. This is
-so we can easily evict a page without iterating through a global variable.
+
+Each process keeps track of its own page table. This design allows us to easily
+free all specific pages belonging to a certain process when process exits or in
+case of an error.
 
 enum location
   {
     SWAP, DISK, NOT_LOADED, FRAME
   };
-This helps to retrieve the location of the page.
+
+Used to keep track of the location of a page weather it is in the physical
+memory or in the swap. If there is a page fault, we can set location to swap.
+We then check again, if it is not in the swap, because the location now is
+SWAP, it means we have an error.
 
 struct page_table_entry
   {
@@ -69,19 +79,17 @@ It holds the necessary data for a page.
 
 ---- ALGORITHMS ----
 
->> A2: (5 marks) 
->> Describe your code for locating the frame, if any, that contains 
+>> A2: (5 marks)
+>> Describe your code for locating the frame, if any, that contains
 >> the data of a given page.
 
-We just iterate through the frame table and look at which page  
-the current frame is pointing to; if it is the given page, then
-we return the frame.
 
 >> A3: (5 marks)
 >> How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame?
 >> Your answer should include a discussion of how you have implemented
 >> sharing of read only pages.
+
 
 If 2 pages alias to a single frame and we try to access it via one of them, 
 we only update the accessed and dirty bits of the page that made the access. 
@@ -90,7 +98,7 @@ hence no need for semaphores or mutual exclusion.
 
 ---- SYNCHRONIZATION ----
 
->> A4: (5 marks) 
+>> A4: (5 marks)
 >> When two user processes both need a new frame at the same time,
 >> how are races avoided? You should consider both when there are
 >> and are not free frames available in memory.
@@ -103,13 +111,13 @@ In the function where we return the page and map it to the frame
 slot (frame_get_page), we first initialise the lock, obtain
 a single free page (from the user pool) and return it to kernel 
 virtual address and we insert this new page in the current thread’s
-page table and we set the location of this page to be the frame. 
+page table and we set the location of this page to be the frame.
 We allocate memory for the frame. If we have space and the
-allocation doesn’t fail then we insert it into the frame table. 
+allocation doesn’t fail then we insert it into the frame table.
 In the case where we don’t have enough space for a frame, we have 2 choices:
 - If we can’t evict a page and swap is full, then we panic the kernel
 - If we can’t evict a page and swap is not full, then we use the swap
-space for creating the frame.  
+space for creating the frame.
 
 ---- RATIONALE ----
 
@@ -131,7 +139,7 @@ implemented by Pintos and didn’t overcomplicate the problem was the hash map.
 >> B1: (5 marks)
 >> Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
->> enumeration that relates to your frame table and swap table.  
+>> enumeration that relates to your frame table and swap table.
 >> Identify the purpose of each in 25 words or less.
 
 struct frame_table_entry
@@ -139,7 +147,9 @@ struct frame_table_entry
     struct hash_elem hash_elem;
     void *pg_addr;
   };
-Contains the pointer to a page in the hash map and the starting address of that page.
+
+hash_elem is used to implement a hash table. Each entry in the frame table keeps
+an address of a user page.
 
 struct swap_table_entry
   {
@@ -147,23 +157,38 @@ struct swap_table_entry
     void *addr;
     block_sector_t sector;
   };
-Contains the pointer to a swap slot, the starting address of that
-slot and block sector where it is located. 
+
+Used to implement a hash table that keeps mapping from page addresses to
+block sector indices. Because the size of a sector is limited to 512B, and a page
+has 4KB, we need to use 8 sector to store a page. Therefore the block sector
+referred is the first used to store that particular page.
+
+
 ---- ALGORITHMS ----
 
 >> B2: (5 marks)
 >> When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
 
-If we require to allocate a frame and we don’t have enough space,
-we try to allocate a swap space. If we then decide to evict that 
-frame, we reclaim that swap slot. 
+We implemented random eviction algorithm. We generate a pseudo-random number
+using random_ulong (), then we mod this number with the size of the table. This
+gives us the index, i, of the entry in the hash table that we want to evict. Then
+we iterate through the hash table from the start i times to pick the entry in
+the hash table.
+
+
 >> B3: (5 marks)
 >> When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
 
-// TODO
+Because process q no longer uses that frame, it means that it was evicted in
+the swap. When we evict a frame to the swap, we make sure that we add the
+address of that frame to the swap table. We than remove the entry from the
+page table hash map. Therefore, this means that process P will find that entry
+as empty in the page table and can use it.
+
+
 >> B4: (5 marks)
 >> Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
@@ -173,9 +198,11 @@ When we have a page fault, we use is_stack_access () to determine if
 the invalid memory access was a stack access. This method checks the
 if the address of the fault is within a valid range for stack access,
 i.e. within 32 bytes of esp and above 0.
-If so, we get upage (user virtual page) and kpage (kernel virtual 
+If so, we get upage (user virtual page) and kpage (kernel virtual
 address) values for the new page from the fault address and extend
 the stack with this page accordingly.
+
+
 ---- SYNCHRONIZATION ----
 
 >> B5: (5 marks)
@@ -188,25 +215,39 @@ Our VM memory prevents any deadlock because we ensure mutual exclusion
 between all threads (when threads have to access a common place in memory
 we introduce a lock), at every point we make sure a thread does not hold
 a resource while waiting for another one (this also wastes CPU cycles
-unnecessarily) and we avoid cycles by not holding and then waiting for 
-a resource.  
+unnecessarily) and we avoid cycles by not holding and then waiting for
+a resource.
+
 >> B6: (5 marks)
 >> A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
 
+In the case when the page fault is caused because the frame is full, and one of
+Q's frames is evicted to swap, then we make sure that we call lock_acquire () on
+the frame table lock ,ft_lock, when we enter
+frame_evict_page (). P has mutual exclusion during the execution of the
+function and Q need to wait for ft_lock to be released by P. When the frame was
+successfully evicted, when P exits frame_evict_page () function, it calls
+lock_release () on ft_lock. Then Q can acquire the ft_lock. There is only one
+lock for the frame table, so only one process can do operations such as eviction.
+On the other side, we haven't implemented page sharing successfully, therefore
+there is no lock for ensuring mutex on writing to pages.
+If we were going to do it, we would require Q acquire the ft_lock also when it
+needs to write to the page.
+
 // TODO
 >> B7: (5 marks)
 >> Explain how you handle access to paged-out pages that occur
->> during system calls. How do you gracefully handle attempted 
+>> during system calls. How do you gracefully handle attempted
 >> accesses to invalid virtual addresses?
 
 If we try to access an invalid virtual address which belonged to
 a paged-out page, then we just bring that page back. If we access
-an invalid virtual address, then we push the exit error code to 
+an invalid virtual address, then we push the exit error code to
 the stack, push the syscall_exit to the stack and call the
-interrupt handler passing the interrupt frame as parameter.      
+interrupt handler passing the interrupt frame as parameter.
 ---- RATIONALE ----
 
 >> B8: (5 marks)
@@ -217,12 +258,12 @@ interrupt handler passing the interrupt frame as parameter.
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
 
-We consider that we’ve used the right amount of locks in order to 
+We consider that we’ve used the right amount of locks in order to
 have the best tradeoff between parallelism and synchronisation. We
 introduce a lock if and only if 2 processes need to access a common
-resource or a shared memory address, unlock it immediately after they 
-finish using it, keeping the rest of code free for parallelism between 
-threads.   
+resource or a shared memory address, unlock it immediately after they
+finish using it, keeping the rest of code free for parallelism between
+threads.
              MEMORY MAPPED FILES
              ===================
 
@@ -231,7 +272,7 @@ threads.
 >> C1: (5 marks)
 >> Copy here the declaration of each new or changed `struct' or
 >> `struct' member, global or static variable, `typedef', or
->> enumeration that relates to your file mapping table.  
+>> enumeration that relates to your file mapping table.
 >> Identify the purpose of each in 25 words or less.
 
 struct thread
@@ -252,17 +293,17 @@ Address of the last file which was mapped into virtual memory.
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
-// TODO 
+// TODO
 >> C3: (5 marks)
 >> Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
 
 In order to deal with this issue we keep track of what memory is
 used by memory mapped files (using file_map defined in thread.h)
-, to make sure we handle the page faults in the mapped regions 
-the right way and therefore when we add a new file mapping, 
-we can easily check if that segment is already occupied or not, 
-and proceed accordingly.  
+, to make sure we handle the page faults in the mapped regions
+the right way and therefore when we add a new file mapping,
+we can easily check if that segment is already occupied or not,
+and proceed accordingly.
 
 ---- RATIONALE ----
 
