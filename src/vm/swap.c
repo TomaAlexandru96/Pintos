@@ -1,9 +1,6 @@
 #include "swap.h"
 #include <stdio.h>
 
-#define SWAP_SIZE(swap_block) ((uint32_t) block_size ((struct block *) swap_block))
-#define SLOT_COUNT (SWAP_SIZE (swap_block) / BLOCK_SECTOR_SIZE)
-
 static struct lock swap_lock;
 static struct block *swap_block;
 static struct bitmap *slots_map;
@@ -15,7 +12,8 @@ void
 swap_init(void)
 {
   swap_block = block_get_role (BLOCK_SWAP);
-  slots_map = bitmap_create (SLOT_COUNT);
+  slots_map = bitmap_create (block_size (swap_block));
+
   lock_init (&swap_lock);
   hash_init (&swap_table, &swap_hash_func, &swap_less_func, NULL);
 }
@@ -52,7 +50,6 @@ get_free_slot (void)
   if (!is_swap_full ())
     {
       start = (int) bitmap_scan (slots_map, 0, SWAP_SLOT_SIZE, false);
-      printf ("start: %d\n\n\n", start);
     }
   else
     {
