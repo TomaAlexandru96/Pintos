@@ -45,13 +45,14 @@ struct thread
 #endif
     …
   }
-For each thread (a.k.a. process) you need to keep track of its own page table.
+Each thread (a.k.a. process) keeps track of its own page table. This is
+so we can easily evict a page without iterating through a global variable.
 
 enum location
   {
     SWAP, DISK, NOT_LOADED, FRAME
   };
-It helps to retrieve the location of the page table. 
+This helps to retrieve the location of the page.
 
 struct page_table_entry
   {
@@ -63,7 +64,7 @@ struct page_table_entry
     int mapping_size;
   };
 This struct simulates the the supplemental page table explained in the spec.
-It holds the necessary data for a page.  
+It holds the necessary data for a page.
 
 
 ---- ALGORITHMS ----
@@ -74,18 +75,19 @@ It holds the necessary data for a page.
 
 We just iterate through the frame table and look at which page  
 the current frame is pointing to; if it is the given page, then
-we return the frame.  
+we return the frame.
+
 >> A3: (5 marks)
 >> How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame?
 >> Your answer should include a discussion of how you have implemented
 >> sharing of read only pages.
 
-If 2 pages alias to a single frame and we try to access that, we only
-update the accessed and dirty bits of the page that made the access. 
-If you share a read only page, that means you won’t have any
-concurrency issues to deal with, hence no need for semaphores or any
-mutual exclusion, you just go and access it. 
+If 2 pages alias to a single frame and we try to access it via one of them, 
+we only update the accessed and dirty bits of the page that made the access. 
+If we share a read only page we won’t have any concurrency issues to deal with, 
+hence no need for semaphores or mutual exclusion. 
+
 ---- SYNCHRONIZATION ----
 
 >> A4: (5 marks) 
@@ -94,12 +96,11 @@ mutual exclusion, you just go and access it.
 >> and are not free frames available in memory.
 
 When two processes try to access the same frame at the same time 
-(Either by a retrieval or removal of a page) we acquire the lock of 
-the frame table (defined as a static variable at the top of frame.c) 
-right from the beginning and we release it at the end of the function
-call. 
+(either by a retrieval or removal of a page) we acquire the lock of 
+the frame table (defined as a static variable at the top of frame.c),
+and release it at the end of the function call. 
 In the function where we return the page and map it to the frame
-slot (frame_get_page), we first initialise the lock, we obtain
+slot (frame_get_page), we first initialise the lock, obtain
 a single free page (from the user pool) and return it to kernel 
 virtual address and we insert this new page in the current thread’s
 page table and we set the location of this page to be the frame. 
@@ -117,10 +118,11 @@ space for creating the frame.
 >> representing virtual-to-physical mappings?
 
 We chose to use the hash table for representing virtual-to-physical
-mappings due to the fact that we want to retrieve really fast a page 
-(In constant time - O(1)) and also have insertion in constant time. Hence,
-the only data structure that we could use, which was implemented already 
+mappings due to the fact that we want to retrieve pages quickly
+(in constant time - O(1)) and also have insertion in constant time. Hence
+we chose the only data structure that we could use which was implemented already 
 implemented by Pintos and didn’t overcomplicate the problem was the hash map. 
+
                PAGING TO AND FROM DISK
                =======================
 
@@ -137,8 +139,7 @@ struct frame_table_entry
     struct hash_elem hash_elem;
     void *pg_addr;
   };
-Contains the pointer to a page in the hash map and the
-starting address of that page. 
+Contains the pointer to a page in the hash map and the starting address of that page.
 
 struct swap_table_entry
   {
