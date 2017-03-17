@@ -62,14 +62,14 @@ void *
 evict_frame_algo (void)
 {
   int frame_table_size = (int) hash_size (&frame_table);
-  uint32_t rand_idx = (uint32_t) (random_ulong () % frame_table_size) + 1;
-  struct hash_iterator *itr;
+  int rand_idx = (int) (random_ulong () % frame_table_size) + 1;
+  struct hash_iterator itr;
   hash_first (&itr, &frame_table);
   struct hash_elem *curr =  hash_cur (&itr);
   //NEED to check this !!!
   for (int i = 0; i < rand_idx; i++)
     {
-      curr = hash_next (itr);
+      curr = hash_next (&itr);
     }
   struct page_table_entry *pt_entry =
             hash_entry (hash_cur (&itr), struct page_table_entry, hash_elem);
